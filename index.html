@@ -1,0 +1,1519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Salt Shack Shapes</title>
+<meta name="description" content="An 8-bit surf shop game: shape boards from wood to foam and longboard to shortboard, then surf them.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap">
+<style>
+/* Layout: one-column arcade cabinet. Pixel stage on top, a shop "console" panel underneath that changes with each screen. Single deliberate dark look (Sweetie-16 palette). */
+:root{
+  --k:#1a1c2c; --plum:#5d275d; --red:#b13e53; --orange:#ef7d57; --sun:#ffcd75; --lime:#a7f070;
+  --green:#38b764; --teal:#257179; --navy:#29366f; --blue:#3b5dc9; --sky:#41a6f6; --aqua:#73eff7;
+  --white:#f4f4f4; --mist:#94b0c2; --slate:#566c86; --dusk:#333c57;
+  --f-display:"Press Start 2P", ui-monospace, "Courier New", monospace;
+  --f-body:"VT323", ui-monospace, "Courier New", monospace;
+  color-scheme: dark;
+}
+html,body{background:var(--k);color:var(--white);height:auto}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+body{font-family:var(--f-body);font-size:20px;line-height:1.2;-webkit-font-smoothing:none}
+*{box-sizing:border-box}
+.app{max-width:1000px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));padding-block:12px 32px;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 14px}
+.brand{font-family:var(--f-display);font-size:13px;color:var(--sun);letter-spacing:.06em;text-shadow:2px 2px 0 var(--red);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{font-family:var(--f-display);font-size:10px;letter-spacing:.04em;padding:7px 9px;background:var(--k);border:2px solid var(--slate);color:var(--white);font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip.money{color:var(--lime)} .chip.rep{color:var(--sun)}
+.tbtn{font-family:var(--f-display);font-size:10px;letter-spacing:.04em;padding:7px 9px;background:var(--navy);color:var(--aqua);border:2px solid var(--aqua);cursor:pointer}
+.tbtn:hover{background:var(--blue)}
+.tbtn[disabled]{opacity:.4;cursor:not-allowed}
+.stage{width:min(100%, calc((100vh - 300px) * 1.7778));width:min(100%, calc((100dvh - 300px) * 1.7778));min-width:min(100%, 560px);margin-inline:auto;border:4px solid var(--k);box-shadow:0 0 0 4px var(--slate),0 0 0 8px var(--k);background:var(--k)}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:manipulation}
+.panel{background:var(--dusk);border:4px solid var(--k);box-shadow:inset 0 0 0 3px var(--slate);padding-block:16px;padding-inline:18px;min-width:0}
+h2,h3{font-family:var(--f-display);font-weight:400;color:var(--sun);margin:0;text-wrap:balance;letter-spacing:.04em;line-height:1.5}
+h2{font-size:13px} h3{font-size:10px;color:var(--aqua)}
+p{margin:0;max-width:68ch}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.muted{color:var(--mist)}
+.small{font-size:18px}
+.btn{font-family:var(--f-display);font-size:11px;letter-spacing:.04em;line-height:1.4;padding:11px 14px;background:var(--orange);color:var(--k);border:3px solid var(--k);box-shadow:inset -3px -3px 0 var(--red),inset 3px 3px 0 var(--sun);cursor:pointer}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{box-shadow:inset 3px 3px 0 var(--red)}
+.btn.blue{background:var(--sky);box-shadow:inset -3px -3px 0 var(--blue),inset 3px 3px 0 var(--aqua)}
+.btn.ghost{background:var(--k);color:var(--mist);box-shadow:inset 0 0 0 2px var(--slate)}
+.btn[disabled]{background:var(--slate);color:var(--dusk);box-shadow:none;cursor:not-allowed;filter:none}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--aqua);outline-offset:2px}
+.card{background:var(--k);border:2px solid var(--slate);padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.quote{font-size:23px;color:var(--white);border-left:4px solid var(--orange);padding-left:12px}
+.tag{display:inline-block;font-family:var(--f-display);font-size:9px;letter-spacing:.05em;padding:5px 7px;background:var(--navy);color:var(--aqua);border:2px solid var(--k)}
+.tag.warn{background:var(--plum);color:var(--sun)}
+/* shaping steps */
+.step{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;align-items:start}
+.num{font-family:var(--f-display);font-size:13px;width:32px;height:32px;display:grid;place-items:center;background:var(--sun);color:var(--k);border:3px solid var(--k);box-shadow:inset -3px -3px 0 var(--orange)}
+.opt small{font-size:16px;color:var(--mist)}
+.opt[aria-pressed="true"] small{color:var(--dusk)}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.checks li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:6px;align-items:baseline}
+.checks .mk{font-family:var(--f-display);font-size:10px}
+.checks .ok{color:var(--lime)} .checks .close{color:var(--sun)} .checks .off{color:var(--orange)}
+.fit{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center}
+.fit .lbl{margin:0}
+.fitbar{height:14px;background:var(--k);border:2px solid var(--slate);display:block}
+.fitbar span{display:block;height:100%}
+/* shaping */
+.shape-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}
+@media (max-width:780px){.shape-grid{grid-template-columns:minmax(0,1fr)}}
+fieldset{border:0;padding:0;margin:0;min-width:0;display:flex;flex-direction:column;gap:6px}
+legend,.lbl{font-family:var(--f-display);font-size:9px;letter-spacing:.06em;color:var(--mist);padding:0;margin-bottom:6px;text-transform:uppercase}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{font-family:var(--f-body);font-size:19px;line-height:1;padding:6px 9px;background:var(--k);color:var(--white);border:2px solid var(--slate);cursor:pointer}
+.opt:hover{border-color:var(--mist)}
+.opt[aria-pressed="true"]{background:var(--aqua);color:var(--k);border-color:var(--aqua)}
+.opt.locked{color:var(--slate);border-style:dashed;cursor:not-allowed}
+.opt.locked i{font-style:normal;color:var(--orange)}
+.tip{font-size:18px;color:var(--mist);min-height:1.2em}
+.sl{display:grid;grid-template-columns:96px minmax(0,1fr) 92px;align-items:center;gap:10px}
+.sl output{font-family:var(--f-display);font-size:10px;color:var(--sun);text-align:right;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:8px;background:var(--k);border:2px solid var(--slate)}
+input[type=range]::-moz-range-track{height:8px;background:var(--k);border:2px solid var(--slate)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:22px;margin-top:-9px;background:var(--sun);border:3px solid var(--k);box-shadow:inset -2px -2px 0 var(--orange)}
+input[type=range]::-moz-range-thumb{width:10px;height:18px;background:var(--sun);border:3px solid var(--k);border-radius:0}
+.stats{display:flex;flex-direction:column;gap:7px}
+.stat{display:grid;grid-template-columns:78px minmax(0,1fr) 38px;gap:8px;align-items:center}
+.stat .nm{font-family:var(--f-display);font-size:9px;letter-spacing:.04em;color:var(--white)}
+.stat .vl{font-family:var(--f-display);font-size:9px;color:var(--mist);text-align:right;font-variant-numeric:tabular-nums}
+.bar{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px}
+.c{height:13px;background:var(--k);border:1px solid var(--dusk)}
+.c.on{background:var(--col,var(--lime));border-color:var(--col,var(--lime))}
+.c.tgt{outline:2px solid var(--sun);outline-offset:1px}
+.specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;font-variant-numeric:tabular-nums}
+.specs b{font-family:var(--f-display);font-size:9px;font-weight:400;color:var(--mist);display:block;margin-bottom:2px;letter-spacing:.05em}
+/* surf pad */
+.surfbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center}
+@media (max-width:640px){.surfbar{grid-template-columns:auto auto;justify-content:space-between}.surfbar .legend{grid-column:1 / -1;order:3}}
+.dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:4px;touch-action:none}
+.pk{font-family:var(--f-display);font-size:14px;background:var(--navy);color:var(--aqua);border:3px solid var(--k);box-shadow:inset -3px -3px 0 var(--k),inset 3px 3px 0 var(--blue);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}
+.pk.on{background:var(--aqua);color:var(--k)}
+.pk.u{grid-column:2;grid-row:1}.pk.l{grid-column:1;grid-row:2}.pk.r{grid-column:3;grid-row:2}.pk.d{grid-column:2;grid-row:3}
+.pk.a{width:84px;height:84px;border-radius:50%;background:var(--red);color:var(--white);box-shadow:inset -4px -4px 0 var(--plum),inset 4px 4px 0 var(--orange);font-size:16px}
+.pk.a.on{background:var(--orange)}
+.legend{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:18px;min-width:0}
+.legend kbd{font-family:var(--f-display);font-size:9px;color:var(--sun);white-space:nowrap;padding-top:4px}
+/* notebook */
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.entries{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.entry h3{color:var(--sun)}
+.entry .era{font-family:var(--f-display);font-size:9px;color:var(--aqua);letter-spacing:.04em}
+.entry .game{font-size:18px;color:var(--lime)}
+.entry button.h{all:unset;cursor:pointer}
+.entry button.h:focus-visible{outline:3px solid var(--aqua)}
+.entry.sel{border-color:var(--aqua)}
+.tl{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 14px}
+.tl b{font-family:var(--f-display);font-size:10px;font-weight:400;color:var(--sun);padding-top:4px}
+.up-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:12px}
+.up .price{font-family:var(--f-display);font-size:11px;color:var(--lime)}
+.owned{font-family:var(--f-display);font-size:9px;color:var(--green)}
+.review li{margin-bottom:4px}
+.review ul{margin:0;padding-left:20px}
+.good{color:var(--lime)} .bad{color:var(--orange)}
+.scorebox{display:flex;flex-wrap:wrap;gap:10px}
+.scorebox .card{flex:1 1 120px;align-items:flex-start}
+.big{font-family:var(--f-display);font-size:18px;color:var(--sun);font-variant-numeric:tabular-nums}
+details summary{font-family:var(--f-display);font-size:10px;color:var(--aqua);cursor:pointer;letter-spacing:.04em}
+details[open] summary{margin-bottom:8px}
+.quiver{display:flex;flex-wrap:wrap;gap:6px}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <h1 class="brand">SALT SHACK SHAPES</h1>
+    <div class="chips" id="chips"></div>
+  </header>
+  <div class="stage"><canvas id="cv" width="640" height="360" role="img" aria-label="Game screen"></canvas></div>
+  <section class="panel" id="panel" aria-live="polite"></section>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ============================== BASICS ============================== */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const panel = document.getElementById('panel');
+const chips = document.getElementById('chips');
+const W = 320, H = 180, TY = 164, HY = 98, RX = 172;
+const P = {k:'#1a1c2c',plum:'#5d275d',red:'#b13e53',orange:'#ef7d57',sun:'#ffcd75',lime:'#a7f070',green:'#38b764',teal:'#257179',navy:'#29366f',blue:'#3b5dc9',sky:'#41a6f6',aqua:'#73eff7',white:'#f4f4f4',mist:'#94b0c2',slate:'#566c86',dusk:'#333c57'};
+const u32 = h => { const n = parseInt(h.slice(1),16); return ((255<<24)|((n&255)<<16)|(((n>>8)&255)<<8)|((n>>16)&255))>>>0; };
+const U = {}; for (const k in P) U[k] = u32(P[k]);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const rnd = (a,b) => a + Math.random()*(b-a);
+const rint = (a,b) => Math.floor(rnd(a,b+1));
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function resetT(){ ctx.setTransform(2,0,0,2,0,0); ctx.imageSmoothingEnabled = false; }
+function rect(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
+function text(s,x,y,c=P.white,size=8,align='left',shadow=P.k){
+  ctx.font = size+'px "Press Start 2P", monospace'; ctx.textAlign=align; ctx.textBaseline='top';
+  if (shadow){ ctx.fillStyle=shadow; ctx.fillText(s,Math.round(x)+1,Math.round(y)+1); }
+  ctx.fillStyle=c; ctx.fillText(s,Math.round(x),Math.round(y));
+}
+function hash(x,y,f){ let h = (x*374761393 + y*668265263 + f*2147483647)|0; h = (h^(h>>>13))*1274126177|0; return (h^(h>>>16))>>>0; }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmtLen(i){ i=Math.round(i); return `${Math.floor(i/12)}'${i%12}"`; }
+function frac(n, den=8){ const w=Math.floor(n+1e-6); let r=Math.round((n-w)*den); if(r===den) return `${w+1}`; if(!r) return `${w}`; let d=den; while(r%2===0&&d%2===0){r/=2;d/=2;} return `${w} ${r}/${d}`; }
+function fmtIn(n,den=8){ return frac(n,den)+'"'; }
+
+/* ============================== SOUND ============================== */
+let actx=null, muted=false;
+function ac(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; } } return actx; }
+function beep(f=440,d=0.08,type='square',vol=0.05,slide=0,delay=0){
+  if(muted) return; const a=ac(); if(!a) return;
+  try{ const t=a.currentTime+delay, o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.setValueAtTime(f,t);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+d);
+    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d); o.connect(g).connect(a.destination); o.start(t); o.stop(t+d+0.02);}catch(e){}
+}
+function noise(d=0.5,vol=0.08){
+  if(muted) return; const a=ac(); if(!a) return;
+  try{ const n=Math.floor(a.sampleRate*d), b=a.createBuffer(1,n,a.sampleRate), ch=b.getChannelData(0); for(let i=0;i<n;i++) ch[i]=(Math.random()*2-1)*(1-i/n);
+    const s=a.createBufferSource(), g=a.createGain(); s.buffer=b; g.gain.value=vol; s.connect(g).connect(a.destination); s.start(); }catch(e){}
+}
+const sfx = {
+  click:()=>beep(660,0.05,'square',0.03),
+  paddle:()=>beep(180,0.06,'triangle',0.06,-60),
+  pop:()=>{beep(392,0.07);beep(523,0.07,'square',0.05,0,0.07);beep(784,0.1,'square',0.05,0,0.14);},
+  trick:(n=0)=>{const b=523+n*40;beep(b,0.06);beep(b*1.25,0.06,'square',0.05,0,0.06);beep(b*1.5,0.09,'square',0.05,0,0.12);},
+  big:()=>{[523,659,784,1047].forEach((f,i)=>beep(f,0.09,'square',0.05,0,i*0.08));},
+  wipe:()=>{noise(0.7,0.09);beep(300,0.4,'sawtooth',0.04,-240);},
+  cash:()=>{beep(988,0.06,'square',0.04);beep(1319,0.14,'square',0.04,0,0.06);},
+  plane:()=>beep(90+Math.random()*30,0.05,'sawtooth',0.02),
+  pump:()=>beep(240,0.04,'triangle',0.05,80),
+};
+
+/* ============================== DATA: MATERIALS / SHAPES / PARTS ============================== */
+const MATERIALS = {
+  wood:{name:'Solid Wood',short:'Koa',density:1.1,cost:20,unlock:0,glide:0.4,hold:0.3,turn:-0.5,paddle:-0.2,stringer:false,
+    tip:'Koa & redwood. Heavy, glides forever, slow to turn. The original.'},
+  balsa:{name:'Balsa + Glass',short:'Balsa',density:0.42,cost:55,unlock:0,glide:0.3,hold:0.3,
+    tip:'1940s–50s. Light wood sealed in fiberglass. Smooth, damp, classic.'},
+  pu:{name:'PU Foam',short:'PU',density:0.24,cost:45,unlock:250,
+    tip:'Polyurethane + polyester, c.1958. The do-everything standard.'},
+  soft:{name:'Soft-Top',short:'Soft',density:0.32,cost:40,unlock:180,stab:2,turn:-0.8,hold:-0.8,glide:-0.8,paddle:0.3,
+    tip:'Foam deck, slick bottom. Safe and stable; mushy in turns.'},
+  eps:{name:'EPS + Epoxy',short:'Epoxy',density:0.17,cost:70,unlock:450,paddle:0.6,glide:0.5,hold:-0.8,turn:0.3,
+    tip:'Bead foam + epoxy. Floaty and fast; corky at speed in big surf.'},
+};
+const TEMPLATES = {
+  olo:{name:'Olo',min:144,max:204,vf:0.65,noseA:2.2,tailW:0.5,wp:0.45,noseF:0,unlock:0,
+    def:{L:180,W:19,T:3.25,rocker:1,tail:'round',fins:'none',rails:'soft'},tip:'Ancient Hawaiian chief\'s board. Enormous, straight, finless.'},
+  log:{name:'Longboard',min:108,max:126,vf:0.56,noseA:4.5,tailW:0.72,wp:0.5,noseF:2.5,unlock:0,
+    def:{L:114,W:23,T:3,rocker:2,tail:'square',fins:'single',rails:'soft'},tip:'The Malibu log. Wide round nose for hanging ten.'},
+  gun:{name:'Gun',min:90,max:132,vf:0.54,noseA:1.4,tailW:0.25,wp:0.55,noseF:0,unlock:0,
+    def:{L:114,W:20,T:3.25,rocker:4,tail:'pin',fins:'single',rails:'medium'},tip:'Long, narrow, pin tail. Built to hunt giant waves.'},
+  minimal:{name:'Mini-Mal',min:84,max:102,vf:0.56,noseA:3.2,tailW:0.62,wp:0.5,noseF:1,unlock:120,
+    def:{L:96,W:22,T:2.875,rocker:2,tail:'round',fins:'2+1',rails:'soft'},tip:'A shrunken Malibu. Easy paddle, more turn than a log.'},
+  alaia:{name:'Alaia',min:72,max:132,vf:0.68,noseA:3,tailW:0.78,wp:0.5,noseF:0,unlock:0,
+    def:{L:90,W:17.5,T:1,rocker:1,tail:'square',fins:'none',rails:'soft'},tip:'Thin, flat, finless Hawaiian board. Fast, slidey, unstable.'},
+  egg:{name:'Egg',min:78,max:96,vf:0.55,noseA:2.6,tailW:0.45,wp:0.48,noseF:0.5,unlock:150,
+    def:{L:84,W:21.5,T:2.75,rocker:3,tail:'round',fins:'single',rails:'soft'},tip:'Rounded mid-length. Long, smooth carves.'},
+  short:{name:'Shortboard',min:66,max:84,vf:0.53,noseA:1.3,tailW:0.5,wp:0.42,noseF:0,unlock:300,
+    def:{L:72,W:19.25,T:2.375,rocker:4,tail:'squash',fins:'thruster',rails:'hard'},tip:'Post-1967 performance shape. Vertical turns and airs.'},
+  hybrid:{name:'Hybrid',min:62,max:72,vf:0.55,noseA:1.9,tailW:0.62,wp:0.45,noseF:0,unlock:220,
+    def:{L:68,W:20.75,T:2.625,rocker:3,tail:'squash',fins:'quad',rails:'medium'},tip:'Modern groveler: shortboard rails, fish-like volume.'},
+  fish:{name:'Fish',min:60,max:72,vf:0.54,noseA:1.8,tailW:0.75,wp:0.4,noseF:0,unlock:200,
+    def:{L:66,W:21,T:2.5,rocker:2,tail:'swallow',fins:'twin',rails:'medium'},tip:'Steve Lis, c.1967. Wide, flat, swallow tail, twin keels.'},
+};
+const TPL_ORDER = ['olo','log','gun','minimal','alaia','egg','short','hybrid','fish'];
+const HIST_MAT = {olo:'wood',alaia:'wood',log:'balsa',gun:'balsa',minimal:'pu',egg:'pu',short:'pu',hybrid:'eps',fish:'pu'};
+const TAILS = {
+  square:{name:'Square',turn:0,hold:-0.3,glide:0.3,nose:1,tip:'Pivots and holds trim. The noserider\'s tail.'},
+  squash:{name:'Squash',turn:0.5,hold:0,glide:0.1,nose:0.5,tip:'Square with rounded corners. The all-rounder.'},
+  round:{name:'Round',turn:0.3,hold:1,glide:0,nose:0.3,tip:'Smooth drawn-out turns, holds in hollow waves.'},
+  pin:{name:'Pin',turn:-0.8,hold:2,glide:-0.2,nose:-1,tip:'Narrow point. Maximum hold at high speed.'},
+  swallow:{name:'Swallow',turn:0.8,hold:-0.3,glide:0.4,nose:-0.5,tip:'Two pins in one. Loose and quick. Fish territory.'},
+  diamond:{name:'Diamond',turn:0.4,hold:0.5,glide:0.1,nose:0,tip:'Angled corners: a squash with a little more bite.'},
+};
+const FINS = {
+  none:{name:'Finless',turn:0.5,hold:-4,glide:0.5,nose:0.5,unlock:0,tip:'Ancient style. Trims and slides; spins out if pushed.'},
+  single:{name:'Single',turn:-1,hold:1.2,glide:0.3,nose:1.2,unlock:0,tip:'Tom Blake, c.1935. Smooth arcs, steady on the nose.'},
+  '2+1':{name:'2+1',turn:0,hold:1.2,glide:0.3,nose:0.6,unlock:120,tip:'Single plus two side bites. Longboard & mid-length staple.'},
+  twin:{name:'Twin Keel',turn:1.2,hold:-1,glide:0.8,nose:-0.5,unlock:150,tip:'Loose and fast. Mark Richards won four world titles on twins.'},
+  quad:{name:'Quad',turn:0.6,hold:1,glide:0.8,nose:-0.5,unlock:220,tip:'Four fins: speed down the line and grip in the barrel.'},
+  thruster:{name:'Thruster',turn:1,hold:1.5,glide:0,nose:-0.5,unlock:250,tip:'Simon Anderson, 1980. Drive plus control: the modern standard.'},
+};
+const RAILS = {
+  soft:{name:'Soft 50/50',turn:-0.6,hold:-0.2,nose:1,stab:0.5,glide:0,tip:'Round, forgiving rails that sit in the water.'},
+  medium:{name:'Medium',turn:0,hold:0,nose:0,stab:0,glide:0,tip:'Tucked edge, a bit of both.'},
+  hard:{name:'Hard Down',turn:0.6,hold:0.6,nose:-0.5,stab:-0.3,glide:0.4,tip:'Sharp low edge releases water for speed and bite.'},
+};
+const STATS = [
+  ['paddle','PADDLE',P.sky],['stab','STABLE',P.lime],['glide','GLIDE',P.aqua],
+  ['turn','TURN',P.orange],['hold','HOLD',P.red],['nose','NOSE',P.sun]];
+
+function calcStats(b){
+  const tp=TEMPLATES[b.tpl], m=MATERIALS[b.mat], tl=TAILS[b.tail], f=FINS[b.fins], r=RAILS[b.rails];
+  const ft=b.L/12;
+  const vol=b.L*b.W*b.T*0.016387*tp.vf;
+  const weight=vol*m.density+(b.mat==='wood'?0:1.5);
+  const s={};
+  s.paddle = Math.sqrt(vol)*0.75 + (ft-6)*0.4 - Math.max(0,weight-22)*0.03 + (m.paddle||0);
+  s.stab   = (b.W-17)*0.8 + Math.sqrt(vol)*0.4 + (m.stab||0) + r.stab;
+  s.turn   = 8 - (ft-5)*0.8 + (b.rocker-3)*0.6 + tl.turn + f.turn + r.turn - weight*0.03 + (m.turn||0);
+  s.glide  = 1 + (ft-5)*0.9 + (3-b.rocker)*0.8 + Math.sqrt(vol)*0.25 + (m.glide||0) + f.glide + tl.glide + r.glide;
+  s.hold   = 3.5 + (ft-6)*0.6 + tl.hold + f.hold + r.hold + (21-b.W)*0.6 + (b.rocker-3)*0.4 + Math.min(weight,40)*0.03 + (m.hold||0);
+  s.nose   = (Math.min(ft,10.5)-8)*1.5 + (b.W-20)*0.6 + tp.noseF + (3-b.rocker)*0.5 + tl.nose + f.nose + r.nose + Math.min(weight,30)*0.05;
+  for(const k in s) s[k]=Math.round(clamp(s[k],0,10)*10)/10;
+  return {s, vol, weight};
+}
+function boardName(b){ return `${fmtLen(b.L)} ${MATERIALS[b.mat].short} ${TEMPLATES[b.tpl].name}`; }
+function blankCost(b){ return Math.round(MATERIALS[b.mat].cost * (0.6 + b.L/210)); }
+
+/* ============================== DATA: SPOTS / CUSTOMERS ============================== */
+const SPOTS = {
+  cove:{name:'Cove Beachbreak',kind:'mushy',size:[2,3],sky:'day',desc:'soft, crumbly beachbreak'},
+  point:{name:'Pelican Point',kind:'clean',size:[3,5],sky:'dusk',desc:'long, peeling point'},
+  reef:{name:'Dumpster Reef',kind:'hollow',size:[4,6],sky:'tropic',desc:'shallow reef that throws barrels'},
+  bombie:{name:'The Bombie',kind:'clean',size:[15,20],sky:'storm',desc:'outer reef, giant swells'},
+};
+const C = {
+  stat:(k,min,w,good,bad)=>({w,good,bad,stat:k,target:min,f:(b,s)=> s[k]>=min?1:clamp(1-(min-s[k])/3.5,0,1)}),
+  len:(lo,hi,w,good,bad)=>({w,good,bad,len:[lo,hi],f:b=> b.L<lo?clamp(1-(lo-b.L)/14,0,1): b.L>hi?clamp(1-(b.L-hi)/14,0,1):1}),
+  is:(field,vals,w,good,bad)=>({w,good,bad,field,vals,f:b=> vals.includes(b[field])?1:0}),
+};
+const ARCH = [
+  {id:'beginner',title:'First-Timer',spot:'cove',price:170,names:['Kenji','Maya','Dot','Priya','Lou','Sam'],
+    ask:'First board ever! I want to catch lots of whitewater and actually stand up. Big, floaty and forgiving, please.',
+    style:{bottom:1.3,make:1.5},req:()=>true,
+    crit:[C.stat('stab',7,3,'So stable, I stood up on my first wave!','It kept rolling out from under me.'),
+          C.stat('paddle',6.5,2,'I could paddle into anything.','I couldn\'t paddle fast enough to catch waves.'),
+          C.len(90,110,1,'Perfect size to learn on.','The size felt wrong for a beginner.'),
+          C.is('mat',['soft'],1,'A soft deck! No bruises.','A hard board scares me a little.')]},
+  {id:'log',title:'Log Purist',spot:'point',price:270,names:['Lani','Hal','Bev','Rusty','Ivy','Moana'],
+    ask:'Nine-six or longer, single fin, heavy and glidey. I want to hang ten all the way down the point.',
+    style:{nose:2,snap:0.6,air:0.3},req:()=>true,
+    crit:[C.stat('nose',7.5,3,'Hung ten for days. That nose is perfect.','The nose just wouldn\'t hold me.'),
+          C.stat('glide',6.5,2,'It glides through the flat sections.','It bogged down in the slow parts.'),
+          C.is('fins',['single'],2,'Single fin, the way it should be.','A log needs a single fin.'),
+          C.len(114,126,1,'Nine-six plus. A real log.','Too short to be a real log.')]},
+  {id:'waterman',title:'Alaia Waterman',spot:'point',price:210,names:['Keoni','Malia','Ikaika','Leilani','Kainoa'],
+    ask:'Ride it like the old Hawaiians: thin wood, no fins, nothing between me and the wave. Seven or eight feet.',
+    style:{make:1.3,snap:1.2},req:()=>true,
+    crit:[C.is('mat',['wood'],3,'Solid wood. My ancestors would approve.','This isn\'t wood.'),
+          C.is('fins',['none'],3,'No fins. Pure trim.','I asked for no fins.'),
+          C.is('tpl',['alaia'],2,'A true alaia outline.','That\'s not an alaia shape.'),
+          C.len(84,102,1,'Just the length I wanted.','Length is off for an alaia.'),
+          C.stat('glide',5.5,1,'It flies when it trims.','It felt slow on the face.')]},
+  {id:'charger',title:'Big-Wave Charger',spot:'bombie',price:390,names:['Buzz','Greer','Mako','Tess','Ronan'],
+    ask:'The Bombie is showing eighteen feet. I need to paddle in early, and I need a board that won\'t spin out at full speed.',
+    style:{make:2,tube:1.5,snap:0.8},req:()=>true,
+    crit:[C.stat('hold',8,3,'It held its line at insane speed.','It chattered and spun out at speed.'),
+          C.stat('paddle',7,2,'I got in early on the bombs.','I couldn\'t paddle into the big ones.'),
+          C.len(108,132,2,'Proper gun length.','Wrong length for waves that size.'),
+          C.is('tail',['pin','round'],1,'Pin tail, locked in.','That tail lets go when it gets big.'),
+          C.is('tpl',['gun'],1,'A real elephant gun.','That isn\'t a gun.')]},
+  {id:'chief',title:'Royal Olo Rider',spot:'point',price:430,names:['Kamalei','Kawika','Ululani','Kekoa'],
+    ask:'Shape me an olo worthy of a chief. Long as you dare, solid wood, built to glide in from far outside.',
+    style:{make:1.2,nose:1.4},req:()=>true,
+    crit:[C.len(168,204,3,'Longer than my canoe. Magnificent.','An olo must be far longer.'),
+          C.is('mat',['wood'],2,'Solid wood, as it should be.','An olo is carved from wood.'),
+          C.stat('glide',8,2,'It glides like a canoe.','It doesn\'t carry speed.'),
+          C.stat('paddle',8,1,'I caught swells from way outside.','Hard to paddle into the swells.')]},
+  {id:'cruiser',title:'Mid-Length Cruiser',spot:'point',price:250,names:['Wren','Otis','Juno','Felix','Noor'],
+    ask:'Something in between, around seven foot. Smooth, drawn-out carves. Single fin or two-plus-one.',
+    style:{snap:1.2,bottom:1.3,cut:1.5},req:u=>u.tpl.includes('egg')||u.tpl.includes('minimal'),
+    crit:[C.len(78,96,2,'Seven-ish, just right.','The length isn\'t mid-length.'),
+          C.stat('turn',5,2,'Carves like a dream.','It felt stiff in turns.'),
+          C.stat('glide',5,1,'Carries speed nicely.','Dead in the flat spots.'),
+          C.stat('stab',5,1,'Nice and steady.','A bit wobbly.'),
+          C.is('fins',['single','2+1'],1,'Love that fin setup.','Not the fins I asked for.'),
+          C.is('tpl',['egg'],1,'A proper egg.','Expected more of an egg outline.')]},
+  {id:'weekend',title:'Weekend Warrior',spot:'cove',price:230,names:['Greg','Dana','Marco','Bea','Theo'],
+    ask:'I surf twice a month and I\'m not getting younger. Easy paddling, but I still want to turn a little. Eight foot-ish?',
+    style:{cut:1.4,bottom:1.2},req:u=>u.tpl.includes('minimal')||u.tpl.includes('egg'),
+    crit:[C.stat('paddle',6,2,'Easy to paddle, even out of shape.','Paddling wore me out.'),
+          C.stat('turn',4.5,2,'Still turns when I want it to.','It wouldn\'t turn at all.'),
+          C.stat('stab',6,2,'Rock solid.','Too tippy for me.'),
+          C.len(84,102,1,'Good length.','Odd size for what I need.'),
+          C.is('tpl',['minimal'],1,'Classic mini-mal.','Expected a mini-mal.')]},
+  {id:'fish',title:'Fish Fanatic',spot:'cove',price:260,names:['Rae','Cody','Pearl','Ziggy','Mo'],
+    ask:'Knee-high mush all summer. Short, wide and fast: swallow tail, twin keels, the whole retro thing.',
+    style:{cut:1.4,snap:1.2},req:u=>u.tpl.includes('fish'),
+    crit:[C.len(60,70,2,'Short and stubby, perfect.','Too long for a fish.'),
+          C.stat('glide',4,2,'Flies through the mush.','It bogged in the small stuff.'),
+          C.stat('turn',7,1,'Skatey and loose.','Stiff.'),
+          C.is('fins',['twin'],2,'Twin keels! Yes.','A fish needs twin keels.'),
+          C.is('tail',['swallow'],2,'That swallow tail is gorgeous.','Where\'s my swallow tail?'),
+          C.is('tpl',['fish'],1,'A true fish outline.','That\'s not a fish.')]},
+  {id:'grom',title:'Comp Grom',spot:'reef',price:310,names:['Kai','Rocket','Nina','Tito','Sunny'],
+    ask:'Heat is at Dumpster Reef. I need snaps and airs: light, loose, thruster, five-eleven to six-two.',
+    style:{snap:1.5,air:2.2,tube:1.2},req:u=>u.tpl.includes('short'),
+    crit:[C.stat('turn',8.3,3,'So loose! Snaps everywhere.','Way too stiff to snap.'),
+          C.len(71,74,2,'Dialed length.','Not my size.'),
+          C.is('fins',['thruster'],2,'Thruster, of course.','I ride a thruster.'),
+          C.stat('hold',4.5,1,'Held in the steep sections.','Slid out on the steep bits.'),
+          C.is('tail',['squash','round'],1,'Good tail for snaps.','That tail feels weird.')]},
+  {id:'ripper',title:'Small-Wave Ripper',spot:'cove',price:270,names:['Ava','Jules','Boone','Tia','Remy'],
+    ask:'Waves are tiny but I still want to rip. Short and wide with a quad so it flies down the line.',
+    style:{snap:1.3,air:1.3,cut:1.3},req:u=>u.tpl.includes('hybrid')||u.tpl.includes('fish'),
+    crit:[C.len(62,70,2,'Short and punchy.','Wrong size for tiny waves.'),
+          C.stat('turn',7.5,2,'Rips in knee-high surf.','Couldn\'t get it to turn.'),
+          C.stat('glide',4,2,'Never bogs.','Stalled in the mush.'),
+          C.stat('stab',4.5,1,'Stable for its size.','Too tippy.'),
+          C.is('fins',['quad'],2,'Quad speed!','I asked for a quad.')]},
+  {id:'tube',title:'Tube Hunter',spot:'reef',size:[6,8],price:350,names:['Koa','Shea','Dez','Ilona','Pua'],
+    ask:'Dumpster Reef at eight feet, square barrels. I need a step-up: a little longer, more rocker, a pin or round tail to sit deep.',
+    style:{tube:2.2,snap:1},req:u=>u.tpl.includes('short'),
+    crit:[C.len(75,84,2,'Perfect step-up length.','Wrong length for a step-up.'),
+          C.stat('hold',7,3,'Locked in deep in the tube.','It slid out of the barrel.'),
+          C.stat('turn',6,1,'Still turns under the lip.','Too stiff to set a line.'),
+          C.is('tail',['pin','round'],2,'That tail holds in the pit.','Wrong tail for barrels.'),
+          C.is('rocker',[4,5],1,'Enough rocker for the drop.','Not enough rocker for steep drops.')]},
+];
+const ARCH_BY = Object.fromEntries(ARCH.map(a=>[a.id,a]));
+const SKIN=['#f2c49b','#d9935f','#a5643a','#6b3f26'], HAIR=[P.k,P.sun,P.orange,P.plum,P.mist,'#6b3f26'],
+      SHIRT=[P.red,P.green,P.blue,P.sky,P.lime,P.plum,P.aqua,P.orange], SHORTS=[P.navy,P.teal,P.dusk,P.red,P.blue];
+const OWNER = {skin:'#d9935f',hair:P.k,shirt:P.teal,shorts:P.navy};
+
+/* ============================== NOTEBOOK (research) ============================== */
+const NOTEBOOK = {
+ materials:[
+  {id:'n-wood',title:'Olo, Alaia & Paipo',era:'Ancient Hawaii to 1800s',key:'wood',
+   body:['Hawaiians rode waves for centuries before Europeans arrived. Boards were cut from native woods such as koa, wiliwili and ʻulu (breadfruit). A tree was chosen with ceremony, roughed out with stone adzes, smoothed with coral and rough stone, then stained dark and sealed with oils such as kukui nut.',
+         'There were three main types. The olo, often 16 feet or longer, was reserved for the aliʻi (chiefs). The alaia, a thin finless board of roughly 6 to 12 feet, was ridden by everyone. The paipo was a short belly board.',
+         'With no fins, riders steered by shifting weight and setting a rail. An alaia trims fast and slides sideways; it demands balance.'],
+   game:'Solid wood: heavy and glidey. Weight slows turns, and only long wood boards paddle well.'},
+  {id:'n-plank',title:'Planks & the Revival',era:'1900s to 1920s',key:'wood',
+   body:['Surfing nearly vanished during the 1800s, then came back at Waikīkī in the early 1900s. George Freeth demonstrated it in California in 1907, and Duke Kahanamoku\'s exhibitions in Australia over the summer of 1914 to 1915 helped spread it around the world.',
+         'Boards were solid redwood or pine planks, 8 to 10 feet long and often 70 to 100 pounds or more. Carrying one to the beach was a workout before you even paddled out.'],
+   game:'Build a long Solid Wood board and check the weight readout.'},
+  {id:'n-hollow',title:'Tom Blake\'s Hollow Boards & the First Fin',era:'1926 to 1940s',key:'wood',
+   body:['Tom Blake lightened a replica olo by drilling it full of holes and sealing it, then developed hollow boards built over a wooden frame and skinned in plywood. They were far lighter than planks and popular for paddling and lifeguarding.',
+         'Around 1935 Blake fixed a small keel to the tail: the first surfboard fin. Until then a board steered only by its rails and tail. The fin let a rider hold a line across the face instead of sliding out.'],
+   game:'Blake\'s keel is the Single fin. Compare it to Finless on the HOLD bar.'},
+  {id:'n-balsa',title:'Balsa & Fiberglass',era:'1940s to 1950s',key:'balsa',
+   body:['After WWII, fiberglass cloth and resin let shapers seal very light balsa wood imported from Ecuador. Bob Simmons brought engineering ideas about planing hulls to board design, and in the late 1940s Joe Quigg and Matt Kivlin built lighter, narrower boards at Malibu, nicknamed "chips," that could actually be turned.',
+         'Balsa blanks had to be glued up from planks, so every board took serious labor. The ride is smooth and damp: balsa absorbs chatter better than foam.'],
+   game:'Lighter than solid wood with a little extra glide and hold. Great for logs and guns.'},
+  {id:'n-pu',title:'Polyurethane Foam',era:'1958 to today',key:'pu',
+   body:['Around 1958 Hobie Alter and Gordon "Grubby" Clark began molding surfboard blanks from polyurethane foam. Glassed with polyester resin and given a thin wooden stringer down the middle for stiffness, the PU board became the industry standard: light, cheap and easy to shape.',
+         'Clark Foam supplied a huge share of the world\'s blanks for decades until it closed without warning in December 2005. Shapers still call that day "Blank Monday." Prices jumped and many builders started experimenting with other foams.'],
+   game:'The neutral baseline material. Every template works well in PU.'},
+  {id:'n-soft',title:'Soft-Tops',era:'1970s to today',key:'soft',
+   body:['Tom Morey, who invented the Boogie board in 1971, teamed up with board maker Mike Doyle in the 1970s to build longer boards from bodyboard-style foam. The soft-top was born: a foam deck over a slick plastic bottom.',
+         'Cheap soft-tops sold by big-box stores later put a generation of beginners in the water and became the default at surf schools. Brands such as Catch Surf, founded in 2008, made foamies fun for good surfers too.'],
+   game:'Big STABLE bonus and safe for learners, but slower turns and less hold.'},
+  {id:'n-eps',title:'EPS & Epoxy',era:'1990s to today',key:'eps',
+   body:['Expanded polystyrene is a bead foam that is lighter than PU for the same size. It has to be glassed with epoxy resin because polyester melts it. Epoxy also makes a tougher shell that resists dings.',
+         'Molded epoxy boards spread through the 1990s and 2000s, and many shapers moved to EPS after Clark Foam closed. The trade-off: extra float and a lively, poppy feel, but a corky, bouncy ride when big or choppy waves call for weight and damping.'],
+   game:'More PADDLE and GLIDE, less HOLD.'},
+ ],
+ shapes:[
+  {id:'s-olo',tpl:'olo',title:'Olo',era:'12 to 18 ft and up',
+   body:['The longest boards ever ridden: thick, straight and heavy, built to catch open-ocean swells early and glide in from far outside. The art was trim, not turning.'],
+   game:'Massive GLIDE and PADDLE. Almost no TURN.'},
+  {id:'s-log',tpl:'log',title:'Longboard (Malibu Log)',era:'9 ft to 10 ft 6',
+   body:['Wide round nose, low rocker, soft 50/50 rails and a single fin. The signature move is noseriding: you walk forward while the tail stays locked in the face. Five toes over the nose is "hang five," both feet is "hang ten." A square tail and a wide nose help.',
+         'Heavy, traditional logs and lighter "performance longboards" with harder rails and a 2+1 are two branches of the same family.'],
+   game:'Hold A mid-face to walk the nose. Watch the NOSE meter.'},
+  {id:'s-gun',tpl:'gun',title:'Gun',era:'7 ft 6 to 11 ft and up',
+   body:['Long and narrow with a pin tail and extra nose rocker. Length gives paddle speed to get into huge waves early; the narrow outline and pin keep the rail engaged at very high speed.',
+         'Big-wave rider Buzzy Trent is usually credited with the name: you do not hunt elephants with a pea shooter. Pat Curren\'s late-1950s boards for Waimea Bay set the pattern.'],
+   game:'High HOLD stops chatter on giant drops.'},
+  {id:'s-mini',tpl:'minimal',title:'Mini-Mal / Funboard',era:'7 ft to 8 ft 6',
+   body:['A shrunken Malibu: rounded nose, lots of volume, easy to paddle and far easier to turn than a full log. It is the classic second board between a learner foamie and a shortboard. "Mal" is Australian slang for a Malibu board.'],
+   game:'Balanced PADDLE, STABLE and TURN.'},
+  {id:'s-alaia',tpl:'alaia',title:'Alaia',era:'6 to 12 ft',
+   body:['A thin, flat, finless board with parallel rails and a square tail. Riders drop at an angle and trim high and fast; the board slides sideways when the rail lets go. Modern shapers revived alaia in the 2000s as a way to feel the wave directly.'],
+   game:'Fast GLIDE, tiny STABLE, almost no HOLD. Use half-face moves.'},
+  {id:'s-egg',tpl:'egg',title:'Egg / Mid-Length',era:'6 ft 6 to 8 ft',
+   body:['A continuous rounded outline with the wide point near the middle. Mid-lengths draw long smooth arcs. They descend from the transition boards of the late 1960s, when shapers were cutting longboards down month by month.'],
+   game:'Good all-round TURN and GLIDE.'},
+  {id:'s-short',tpl:'short',title:'Shortboard',era:'5 ft 8 to 7 ft',
+   body:['The shortboard revolution happened fast. Nat Young won the 1966 World Contest in San Diego on a lighter, thinner board ridden with constant direction changes. Bob McTavish\'s vee-bottom boards and George Greenough\'s flexible swept fins, born from kneeboarding, pushed further, and by around 1970 many boards were under seven feet.',
+         'Today\'s shortboard has a narrow pointed nose, plenty of rocker, hard rails, a squash tail and thruster fins. It turns vertically and launches airs but paddles poorly and has little glide in weak waves.'],
+   game:'Top TURN. Pump with → to make up for low GLIDE.'},
+  {id:'s-hybrid',tpl:'hybrid',title:'Hybrid / Groveler',era:'5 ft 2 to 5 ft 10',
+   body:['A modern daily driver for weak surf. It keeps shortboard rails and rocker but adds fish-like width, volume and a fuller nose, often with a quad or five-fin setup. You ride it shorter than your normal shortboard.'],
+   game:'Shortboard turning with more GLIDE.'},
+  {id:'s-fish',tpl:'fish',title:'Fish',era:'5 ft to 6 ft',
+   body:['Steve Lis shaped the first fish in San Diego around 1967 as a kneeboard: short, wide and flat with a deep swallow tail and two keel fins. It planes fast in small, soft waves. The retro fish made a big comeback in the late 1990s and 2000s.'],
+   game:'Twin keels + swallow tail: loose and quick in mush.'},
+ ],
+ anatomy:[
+  {id:'a-vol',title:'Volume (liters)',era:'Float',body:['Length times width times thickness, scaled by how full the outline is. Volume floats you: more liters means easier paddling and more stability. A typical shortboard sits around 25 to 32 liters; a longboard can run 60 to 90.'],game:'PADDLE and STABLE come mostly from volume and width.'},
+  {id:'a-rock',title:'Rocker',era:'Curve',body:['The banana curve from nose to tail. A flat board planes early and glides fast in weak waves. A curved board fits a steep, hollow face and turns tight but pushes more water. Nose rocker also keeps the nose from digging on late drops, called "pearling."'],game:'More rocker: +TURN, +HOLD, −GLIDE, safer drops on hollow waves.'},
+  {id:'a-rail',title:'Rails',era:'Edges',body:['Soft, rounded 50/50 rails sit in the water and forgive mistakes, which suits noseriding. Hard "down" rails have a sharp low edge that lets water release off the bottom for speed and bite in turns.'],game:'Soft: +NOSE, +STABLE. Hard: +TURN, +HOLD, +GLIDE.'},
+  {id:'a-tail',title:'Tails',era:'Release',body:['Square tails pivot and hold trim. Squash tails round the corners into an all-rounder. Round tails hold through drawn-out turns and hollow waves. Pin tails give the most hold for big, fast surf. Swallow tails act like two pins and stay loose; diamond tails sit between squash and round.'],game:'Pin: +HOLD. Swallow: +TURN, +GLIDE. Square: +NOSE.'},
+  {id:'a-fins',title:'Fins',era:'Grip',body:['Finless boards trim and slide. Tom Blake\'s single fin (c.1935) gave drive and steady noseriding. The Campbell brothers\' bonzer (1970) added side keels. Twin fins went mainstream when Mark Richards won four straight world titles on them from 1979 to 1982: loose and fast but skatey.',
+     'In 1980 Simon Anderson put three equal fins on one board, the thruster, then won at Bells Beach in huge surf in 1981. It has been the standard ever since. Quads give speed down the line; 2+1 pairs a big center fin with small side bites.'],game:'Twin: +TURN, −HOLD. Thruster: +TURN, +HOLD. Single: +NOSE.'},
+ ],
+ timeline:[
+  ['Ancient','Hawaiians shape olo, alaia and paipo from koa, wiliwili and ʻulu.'],
+  ['1907','George Freeth demonstrates surfing in California.'],
+  ['1914–15','Duke Kahanamoku\'s exhibitions in Australia spread surfing abroad.'],
+  ['1926','Tom Blake begins experimenting with hollow boards.'],
+  ['c.1935','Blake adds the first fixed fin.'],
+  ['Late 1940s','Balsa + fiberglass; Simmons, Quigg and Kivlin build lighter Malibu boards.'],
+  ['c.1958','Hobie Alter and Grubby Clark start making polyurethane foam blanks.'],
+  ['Late 1950s','Pat Curren\'s guns at Waimea define the big-wave board.'],
+  ['1966','Nat Young wins the World Contest in San Diego; the shortboard revolution starts.'],
+  ['c.1967','Steve Lis shapes the first fish.'],
+  ['1970','Campbell brothers\' bonzer. Most boards now under 7 ft.'],
+  ['1970s','Tom Morey and Mike Doyle develop the soft-top.'],
+  ['1979–82','Mark Richards wins four world titles on twin fins.'],
+  ['1980–81','Simon Anderson\'s thruster wins Bells Beach.'],
+  ['1990s','EPS and epoxy boards spread.'],
+  ['Dec 2005','Clark Foam closes: "Blank Monday."'],
+  ['2000s','Retro revival: fish, alaia, logs and mid-lengths return alongside modern shortboards.'],
+ ],
+};
+
+/* ============================== SAVE ============================== */
+const KEY='saltshack.v1';
+function freshSave(){ return {money:150,day:1,unlocked:{mat:['wood','balsa'],tpl:['olo','alaia','log','gun'],fin:['none','single']},ratings:[],served:{},rack:[],built:0,customer:null,board:null,last:null,muted:false,legend:false}; }
+function load(){ try{ const r=localStorage.getItem(KEY); if(r){ const s=JSON.parse(r); return Object.assign(freshSave(),s); } }catch(e){} return null; }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+let hasSave = !!load();
+let S = load() || freshSave();
+muted = !!S.muted;
+
+/* ============================== STATE ============================== */
+let screen='title', tick=0, lastT=performance.now(), shake=0;
+let shopT0=0, shapeDust=[], nb={tab:'materials',sel:null}, confirmNew=false;
+let surf=null;
+const keys={up:0,down:0,left:0,right:0,a:0}, pressed={};
+function press(k){ if(!keys[k]) pressed[k]=true; keys[k]=1; }
+function release(k){ keys[k]=0; }
+function consume(k){ const v=!!pressed[k]; pressed[k]=false; return v; }
+
+/* ============================== BOARD DRAWING ============================== */
+function halfFrac(b,t){
+  const tp=TEMPLATES[b.tpl], wp=tp.wp; let s;
+  if(t>=wp){ const u=(t-wp)/(1-wp); s=Math.sqrt(Math.max(0,1-Math.pow(u,tp.noseA))); }
+  else { const u=(wp-t)/wp; s=1-(1-tp.tailW)*u*u; }
+  switch(b.tail){
+    case 'pin': if(t<0.22) s*=Math.pow(t/0.22,0.75); break;
+    case 'round': if(t<0.08) s*=Math.sqrt(t/0.08); break;
+    case 'squash': if(t<0.025) s*=0.72+0.28*(t/0.025); break;
+    case 'diamond': if(t<0.06) s*=0.45+0.55*(t/0.06); break;
+  }
+  return s;
+}
+function matCols(m){
+  return {wood:{base:P.orange,alt:P.red,edge:P.plum,str:null},balsa:{base:P.sun,alt:'#f0b860',edge:P.orange,str:P.red},
+          pu:{base:P.white,alt:P.white,edge:P.mist,str:P.orange},soft:{base:P.sky,alt:P.blue,edge:P.white,str:null},
+          eps:{base:P.white,alt:P.aqua,edge:P.aqua,str:null}}[m];
+}
+const bcache=new Map();
+function boardCanvas(b,sc,orient,ghost){
+  const key=[b.mat,b.tpl,b.L,b.W,b.tail,sc,orient,ghost?1:0].join('|');
+  if(bcache.has(key)) return bcache.get(key);
+  const Lp=Math.max(4,Math.round(b.L*sc)), Wp=Math.max(3,b.W*sc);
+  const c=document.createElement('canvas'); const wd=Math.ceil(Wp)+2;
+  c.width=orient==='h'?Lp:wd; c.height=orient==='h'?wd:Lp;
+  const g=c.getContext('2d'); const col=matCols(b.mat); const mid=wd/2;
+  for(let i=0;i<Lp;i++){
+    const t=(i+0.5)/Lp; const hw=Math.round(halfFrac(b,t)*Wp/2); if(hw<1) continue;
+    const notch = b.tail==='swallow' && t<0.1 ? Math.round(hw*0.6*(1-t/0.1)) : -1;
+    for(let o=-hw;o<hw;o++){
+      if(notch>=0 && Math.abs(o+0.5)<notch) continue;
+      let c2;
+      const edge = (o===-hw||o===hw-1);
+      if(ghost) c2 = edge?P.slate:P.dusk;
+      else if(edge) c2=col.edge;
+      else if(col.str && o===0) c2=col.str;
+      else if(b.mat==='wood') c2 = ((o+hw+Math.round(Math.sin(i*0.08)*1.5))%4===0)?col.alt:col.base;
+      else if(b.mat==='balsa') c2 = ((o+hw)%5===0)?col.alt:col.base;
+      else if(b.mat==='soft') c2 = (Math.abs(o)===hw-2)?P.white:(((i>>1)+(o>>1))%3===0?col.alt:col.base);
+      else if(b.mat==='eps') c2 = (hash(i,o,7)%11===0)?P.mist:col.base;
+      else c2=col.base;
+      g.fillStyle=c2;
+      const p = Math.floor(mid+o);
+      if(orient==='h') g.fillRect(i,p,1,1); else g.fillRect(p,Lp-1-i,1,1);
+    }
+  }
+  if(bcache.size>80) bcache.clear();
+  bcache.set(key,c); return c;
+}
+function drawBoard(b,cx,cy,sc,orient='h',ghost=false){
+  const c=boardCanvas(b,sc,orient,ghost); ctx.drawImage(c,Math.round(cx-c.width/2),Math.round(cy-c.height/2));
+  return c;
+}
+function rockerAt(b,t){ const nr=1.2+b.rocker*1.0, tr=0.5+b.rocker*0.5; return nr*Math.pow(Math.max(0,t-0.5)*2,2.2)+tr*Math.pow(Math.max(0,0.5-t)*2,2); }
+function drawProfile(b,cx,cy,sc){
+  const Lp=Math.round(b.L*sc), x0=Math.round(cx-Lp/2), col=matCols(b.mat), ex=2;
+  for(let i=0;i<Lp;i++){
+    const t=(i+0.5)/Lp; const z=rockerAt(b,t)*sc*ex;
+    const th=Math.max(1,Math.round(b.T*sc*(1-Math.pow(Math.abs(t-0.45)/0.55,2)*0.75)*1.4));
+    const by=Math.round(cy-z);
+    rect(x0+i,by-th,1,th,col.base); rect(x0+i,by,1,1,col.edge); rect(x0+i,by-th,1,1,col.edge);
+  }
+  const finAt=(t,depthIn,baseIn,c=P.k)=>{ const x=x0+Math.round(t*Lp), by=Math.round(cy-rockerAt(b,t)*sc*ex)+1, d=Math.max(2,Math.round(depthIn*sc)), bs=Math.max(2,Math.round(baseIn*sc));
+    for(let j=0;j<d;j++){ const w=Math.max(1,Math.round(bs*(1-j/d))); rect(x-Math.round(j*0.6),by+j,w,1,c);} };
+  const big=b.L>=108?8:6.5;
+  switch(b.fins){
+    case 'single': finAt(0.05,big,5); break;
+    case '2+1': finAt(0.06,big-1,4.5); finAt(0.15,3.5,3,P.slate); break;
+    case 'twin': finAt(0.06,5,7); break;
+    case 'thruster': finAt(0.035,4.5,4); finAt(0.13,4.5,4,P.slate); break;
+    case 'quad': finAt(0.07,4,3.8); finAt(0.13,4.3,4,P.slate); break;
+  }
+}
+
+/* ============================== PEOPLE ============================== */
+function randLook(){ return {skin:pick(SKIN),hair:pick(HAIR),shirt:pick(SHIRT),shorts:pick(SHORTS)}; }
+function drawPerson(x,y,lk,pose='stand',f=0,flip=false){
+  x=Math.round(x); y=Math.round(y); const s=flip?-1:1;
+  const head=(hx,hy,face=1)=>{ rect(hx,hy,5,5,lk.skin); rect(hx,hy-1,5,2,lk.hair); rect(face>0?hx:hx+4,hy,1,3,lk.hair); rect(face>0?hx+3:hx+1,hy+2,1,1,P.k); };
+  switch(pose){
+  case 'stand': case 'walk': {
+    const st = pose==='walk' ? (Math.floor(f*8)%2) : 0;
+    rect(x-2,y-6,2,6-st,lk.skin); rect(x+1,y-6,2,6-(pose==='walk'?(1-st):0),lk.skin);
+    rect(x-3,y-10,7,4,lk.shorts); rect(x-3,y-16,7,6,lk.shirt);
+    rect(x-4,y-15,1,5,lk.skin); rect(x+4,y-15,1,5,lk.skin);
+    head(x-2,y-21,flip?-1:1); break; }
+  case 'claim':
+    rect(x-4,y-5,2,5,lk.skin); rect(x+3,y-5,2,5,lk.skin);
+    rect(x-3,y-9,7,4,lk.shorts); rect(x-3,y-15,7,6,lk.shirt);
+    rect(x-5,y-22,1,8,lk.skin); rect(x+5,y-22,1,8,lk.skin); rect(x-6,y-23,2,2,lk.skin); rect(x+5,y-23,2,2,lk.skin);
+    head(x-2,y-20); break;
+  case 'surf': case 'tube': case 'nose': case 'grab': case 'rise': {
+    const low = pose==='tube'||pose==='grab'?3:pose==='rise'?4:pose==='nose'?-1:1;
+    rect(x-4,y-5+low,2,5-low,lk.skin); rect(x+3,y-5+low,2,5-low,lk.skin);
+    rect(x-3,y-9+low,7,4,lk.shorts); rect(x-2+s,y-15+low,6,6,lk.shirt);
+    if(pose==='nose'){ rect(x-6,y-13+low,3,1,lk.skin); rect(x+5,y-13+low,2,1,lk.skin); }
+    else if(pose==='grab'){ rect(x-3,y-10+low,1,7,lk.skin); rect(x+5,y-14+low,4,1,lk.skin); }
+    else { rect(x-7,y-13+low,4,1,lk.skin); rect(x+5,y-14+low,4,1,lk.skin); }
+    head(x-1+s,y-20+low,s); break; }
+  case 'walkboard': {
+    const a=Math.floor(f*10)%2;
+    rect(x-2+(a?2:0),y-6,2,6,lk.skin); rect(x+1-(a?2:0),y-6,2,6,lk.skin);
+    rect(x-3,y-10,7,4,lk.shorts); rect(x-3,y-16,7,6,lk.shirt);
+    rect(x-6,y-14,3,1,lk.skin); rect(x+4,y-14,3,1,lk.skin);
+    head(x-2,y-21); break; }
+  case 'dropknee':
+    rect(x+3,y-5,2,5,lk.skin); rect(x-5,y-2,4,2,lk.skin);
+    rect(x-3,y-7,7,4,lk.shorts); rect(x-2,y-13,6,6,lk.shirt);
+    rect(x-6,y-12,4,1,lk.skin); rect(x+4,y-11,4,1,lk.skin);
+    head(x-1,y-18); break;
+  case 'spin': {
+    const q=Math.floor(f*8)%4;
+    if(q===0||q===2){ // front / back on
+      rect(x-3,y-5,2,5,lk.skin); rect(x+2,y-5,2,5,lk.skin);
+      rect(x-3,y-9,7,4,lk.shorts); rect(x-3,y-15,7,6,q?lk.shirt:lk.shirt);
+      rect(x-8,y-14,5,1,lk.skin); rect(x+4,y-14,5,1,lk.skin);
+      rect(x-2,y-20,5,5,q?lk.hair:lk.skin); rect(x-2,y-21,5,2,lk.hair);
+    } else drawPerson(x,y,lk,'surf',0,q===3);
+    break; }
+  case 'prone': case 'paddle': {
+    // lying on the board, head toward the nose (right)
+    rect(x-12,y-2,6,2,lk.skin);              // legs
+    rect(x-7,y-3,4,3,lk.shorts);
+    rect(x-3,y-4,7,3,lk.shirt);              // torso
+    head(x+4,y-8);                           // head up, looking forward
+    if(pose==='paddle'){
+      const a=Math.floor(f*4)%4;
+      if(a===0) rect(x+5,y-3,5,1,lk.skin);            // reach forward
+      else if(a===1){ rect(x+3,y-2,1,2,lk.skin); rect(x+3,y,1,3,lk.skin); } // catch, hand in the water
+      else if(a===2){ rect(x-2,y-2,5,1,lk.skin); rect(x-3,y-1,1,3,lk.skin); } // pull back
+      else { rect(x+1,y-7,1,3,lk.skin); rect(x+2,y-8,2,1,lk.skin); }       // recover over the top
+    } else rect(x+1,y-1,4,1,lk.skin);
+    break; }
+  case 'pushup':
+    rect(x-12,y-2,6,2,lk.skin); rect(x-7,y-4,4,3,lk.shorts);
+    rect(x-3,y-6,3,3,lk.shirt); rect(x,y-8,4,3,lk.shirt);
+    rect(x+3,y-6,1,6,lk.skin);
+    head(x+3,y-13); break;
+  case 'tuck':
+    rect(x-4,y-2,3,2,lk.skin); rect(x+1,y-2,3,2,lk.skin);
+    rect(x-3,y-5,6,3,lk.shorts); rect(x-1,y-10,6,5,lk.shirt);
+    rect(x+4,y-7,1,6,lk.skin);
+    head(x+3,y-15); break;
+  case 'pop':
+    rect(x-4,y-3,8,3,lk.shorts); rect(x-2,y-8,6,5,lk.shirt); head(x+3,y-11); rect(x-4,y-2,2,2,lk.skin); break;
+  case 'tumble': {
+    const a=Math.floor(f*10)%4, ox=[0,3,0,-3][a], oy=[0,-2,-4,-2][a];
+    rect(x-3+ox,y-10+oy,7,5,lk.shirt); rect(x-2-ox,y-15-oy,5,5,lk.skin); rect(x+2+ox,y-6,2,5,lk.skin); rect(x-4-ox,y-7+oy,2,4,lk.skin); break; }
+  case 'swim': {
+    const a=Math.floor(f*3)%2;
+    head(x-2,y-5); rect(x-3,y,7,1,P.white);
+    if(a) rect(x+3,y-7,1,4,lk.skin); else rect(x-4,y-6,1,3,lk.skin);
+    break; }
+  }
+}
+function drawStar(x,y,on,sz=1){
+  const pat=['...#...','...#...','..###..','#######','.#####.','.##.##.','#.....#'];
+  for(let r=0;r<7;r++) for(let c=0;c<7;c++) if(pat[r][c]==='#') rect(x+c*sz,y+r*sz,sz,sz,on?P.sun:P.slate);
+}
+
+/* ============================== CUSTOMERS ============================== */
+function newCustomer(){
+  let elig=ARCH.filter(a=>a.req(S.unlocked));
+  let a;
+  if(S.built===0) a=ARCH_BY.beginner;
+  else {
+    const lastId=S.lastArch; const pool=elig.filter(x=>x.id!==lastId); const list=pool.length?pool:elig;
+    const wts=list.map(x=>!S.served[x.id]?3:S.served[x.id]<4?2:1);
+    let r=Math.random()*wts.reduce((p,c)=>p+c,0); a=list[0];
+    for(let i=0;i<list.length;i++){ r-=wts[i]; if(r<=0){ a=list[i]; break; } }
+  }
+  const sp=SPOTS[a.spot], rng=a.size||sp.size;
+  S.customer={arch:a.id,name:pick(a.names),look:randLook(),size:rint(rng[0],rng[1]),spot:a.spot};
+  S.lastArch=a.id; shopT0=tick; save();
+}
+function repScore(){ const r=S.ratings.slice(-8); return r.length? r.reduce((a,b)=>a+b,0)/r.length : 0; }
+
+/* ============================== SCREEN: TITLE ============================== */
+function drawTitle(t){
+  const bands=[P.plum,P.red,P.orange,P.sun];
+  for(let y=0;y<110;y++){ const bi=Math.min(3,Math.floor(y/27.5)); const d=(y%27.5)<2&&bi>0; rect(0,y,W,1,bands[bi]); if(d) for(let x=(y&1);x<W;x+=2) rect(x,y,1,1,bands[bi-1]); }
+  // striped sun
+  for(let y=-30;y<=0;y++){ const w=Math.sqrt(900-y*y); const yy=108+y; if(yy>86 && (yy%4)<2) continue; rect(232-w,yy,w*2,1,yy<92?P.sun:P.white); }
+  // headland
+  for(let x=0;x<W;x++){ const h=Math.max(0,12+8*Math.sin(x*0.02+1)+4*Math.sin(x*0.07))*(x<130?1:0); if(h>0) rect(x,110-h,1,h,P.plum); }
+  // sea
+  rect(0,110,W,70,P.navy);
+  for(let y=112;y<180;y+=5){ const off=Math.floor(t*12*(y/60))%40; for(let x=-off;x<W;x+=40) rect(x+(y*7)%40,y,10+(y%3)*4,1,y<130?P.orange:P.blue); }
+  // little wave + surfer
+  const wx=((t*28)%420)-60;
+  for(let i=0;i<70;i++){ const h=Math.round(16*Math.sin((i/70)*Math.PI)); rect(wx+i,148-h,1,h,i<10?P.white:P.sky); rect(wx+i,148-h,1,1,P.white);}
+  drawBoard({mat:'pu',tpl:'short',L:72,W:19,tail:'squash'},wx+40,140,0.25,'h');
+  drawPerson(wx+40,139,OWNER,'surf');
+  // shack
+  rect(20,128,64,40,P.red); rect(16,122,72,8,P.orange); rect(24,122,6,46,P.plum);
+  rect(46,140,14,28,P.k); rect(64,134,14,10,P.sun);
+  text('SALT SHACK',W/2,30,P.sun,16,'center',P.red);
+  text('SHAPES',W/2,52,P.white,16,'center',P.plum);
+  text('A SURF SHOP SHAPING GAME',W/2,76,P.k,8,'center',null);
+  if(Math.floor(t*2)%2===0) text('PRESS START',W/2,160,P.white,8,'center');
+}
+
+/* ============================== SCREEN: SHOP ============================== */
+function drawShop(t){
+  rect(0,0,W,130,P.navy);
+  for(let x=0;x<W;x+=14) rect(x,0,1,130,P.dusk);
+  // window
+  rect(114,26,94,58,P.k); rect(117,29,88,28,P.sky); rect(117,57,88,24,P.blue);
+  rect(180,34,10,10,P.white);
+  for(let i=0;i<88;i++){ const h=2+Math.round(2*Math.sin(i*0.25+t*3)); rect(117+i,57-h,1,h,P.aqua); }
+  rect(160,29,2,52,P.k); rect(117,55,88,2,P.k);
+  // neon sign
+  const fl = Math.sin(t*9)>-0.95;
+  text('SALT SHACK',160,8,fl?P.aqua:P.teal,8,'center',P.k);
+  // rack
+  rect(8,30,100,3,P.orange); rect(8,120,100,4,P.orange);
+  const rack=S.rack.slice(0,7);
+  rack.forEach((b,i)=>{ const c=boardCanvas(b,0.42,'v'); ctx.drawImage(c,Math.round(18+i*13-c.width/2),Math.round(120-c.height)); });
+  if(!rack.length) text('EMPTY RACK',58,70,P.slate,8,'center',null);
+  // shaping bay door
+  rect(214,40,40,80,P.k); rect(216,42,36,78,P.dusk); text('BAY',234,50,P.sun,8,'center',null);
+  rect(222,70,24,2,P.aqua);
+  // floor
+  rect(0,124,W,56,P.orange);
+  for(let y=128;y<180;y+=8) rect(0,y,W,1,P.red);
+  for(let y=128,r=0;y<180;y+=8,r++) for(let x=(r%2)*30;x<W;x+=60) rect(x,y,1,8,P.red);
+  // counter + owner
+  drawPerson(280,140,OWNER,'stand',0,true);
+  rect(254,128,66,40,P.red); rect(250,124,70,6,P.sun); rect(258,134,58,2,P.plum);
+  rect(296,114,14,10,P.dusk); rect(298,116,10,4,P.lime);
+  // customer
+  if(S.customer){
+    const c=S.customer; const dt=t-shopT0; const x=Math.max(186, 340 - dt*70); const walking = x>186;
+    if(screen==='shop') {
+      drawPerson(x,168,c.look,walking?'walk':'stand',t,true);
+      if(!walking){ const bob=Math.floor(t*3)%2; rect(178,128-bob,16,14,P.white); rect(186,142-bob,3,3,P.white); text('!',182,131-bob,P.k,8,'left',null); }
+    }
+  }
+  text(`DAY ${S.day}`,6,168,P.k,8,'left',null);
+}
+
+/* ============================== SCREEN: SHAPING BAY ============================== */
+function drawShape(t){
+  rect(0,0,W,H,P.dusk);
+  // side lights (shaping rooms light from the sides to show the curves)
+  rect(0,18,W,2,P.mist); rect(0,104,W,2,P.mist);
+  rect(0,20,W,1,P.slate); rect(0,106,W,1,P.slate);
+  // floor & dust
+  rect(0,150,W,30,P.k);
+  for(let i=0;i<60;i++){ const x=(i*53)%W, y=152+((i*17)%26); rect(x,y,2,1,P.slate); }
+  const b=S.board; if(!b) return;
+  const sc=1.3;
+  // stands
+  const Lp=b.L*sc; rect(160-Lp*0.3-2,72,4,34,P.k); rect(160+Lp*0.3-2,72,4,34,P.k);
+  drawBoard(b,160,62,sc,'h');
+  drawProfile(b,160,126,sc);
+  // ruler
+  const x0=Math.round(160-Lp/2); rect(x0,142,Math.round(Lp),1,P.mist);
+  for(let i=0;i<=Math.floor(b.L/12);i++){ rect(x0+Math.round(i*12*sc),140,1,i%5===0?5:3,P.mist); }
+  rect(x0+Math.round(Lp)-1,138,1,6,P.sun);
+  text(boardName(b).toUpperCase(),6,4,P.sun,8,'left');
+  const r=calcStats(b);
+  text(`${fmtLen(b.L)} x ${frac(b.W,4)} x ${frac(b.T)}`,6,160,P.white,8,'left');
+  text(`${r.vol.toFixed(1)}L ${Math.round(r.weight)}LB`,314,160,P.aqua,8,'right');
+  text('NOSE>',314,88,P.slate,8,'right',null);
+  // dust
+  for(const d of shapeDust){ d.t+=1/60; d.x+=d.vx/60; d.y+=d.vy/60; d.vy+=60/60; rect(d.x,d.y,1,1,d.c); }
+  shapeDust=shapeDust.filter(d=>d.t<1.2 && d.y<178);
+}
+function dust(n=24){
+  if(REDUCED) n=6; const b=S.board; const Lp=b.L*1.3;
+  for(let i=0;i<n;i++) shapeDust.push({x:160+rnd(-Lp/2,Lp/2),y:62+rnd(-10,10),vx:rnd(-20,20),vy:rnd(-30,0),t:0,c:pick([P.white,P.mist,P.sun])});
+  sfx.plane();
+}
+
+/* ============================== SCREEN: NOTEBOOK LINEUP ============================== */
+function drawLineup(t){
+  rect(0,0,W,H,P.navy);
+  for(let x=0;x<W;x+=14) rect(x,0,1,H,P.dusk);
+  rect(0,150,W,30,P.orange); rect(0,150,W,2,P.sun);
+  text('THE QUIVER: LONG TO SHORT',W/2,6,P.sun,8,'center');
+  const sc=0.66; const n=TPL_ORDER.length; const gap=W/(n+0.4);
+  TPL_ORDER.forEach((k,i)=>{
+    const tp=TEMPLATES[k]; const b={...tp.def,tpl:k,mat:HIST_MAT[k]};
+    const owned=S.unlocked.tpl.includes(k);
+    const x=Math.round(gap*(i+0.7)); const c=boardCanvas(b,sc,'v',!owned);
+    const sel=nb.sel===k;
+    const y=148-c.height;
+    if(sel){ rect(x-c.width/2-2,y-2,c.width+4,c.height+4,P.aqua); rect(x-c.width/2-1,y-1,c.width+2,c.height+2,P.navy); }
+    ctx.drawImage(c,Math.round(x-c.width/2),Math.round(y));
+    rect(x-1,152,2,3+(i%2)*6,P.red);
+  });
+  const k=nb.sel||'log'; const tp=TEMPLATES[k];
+  text(`${tp.name.toUpperCase()}  ${fmtLen(tp.def.L)}`,W/2,166,P.k,8,'center',null);
+}
+
+/* ============================== SCREEN: RESULTS / UPGRADES ============================== */
+function drawBeach(t,skyKey){
+  const sky=SKIES[skyKey||'day'];
+  for(let y=0;y<100;y++){ const bi=Math.min(3,Math.floor(y/25)); rect(0,y,W,1,sky.b[bi]); }
+  rect(0,100,W,30,sky.sea); for(let y=104;y<130;y+=6){ const o=Math.floor(t*10)%30; for(let x=-o;x<W;x+=30) rect(x+(y%5)*6,y,8,1,P.aqua); }
+  rect(0,130,W,50,P.sun); for(let i=0;i<50;i++) rect((i*37)%W,134+(i*13)%44,1,1,P.orange);
+  for(let x=0;x<W;x++){ const h=2+Math.round(2*Math.sin(x*0.1+t*2)); rect(x,128,1,h,P.white); }
+}
+function drawResults(t){
+  const R=S.last; drawBeach(t, R?SPOTS[R.spot].sky:'day');
+  if(!R) return;
+  const c=boardCanvas(R.board,0.5,'v'); ctx.drawImage(c,Math.round(120-c.width/2),Math.round(170-c.height));
+  drawPerson(134,170,R.look,'stand',t);
+  const shown=Math.min(R.stars, Math.floor(t*4)/2);
+  for(let i=0;i<5;i++){ const on=i+1<=shown; drawStar(170+i*26,40,on,3); if(!on && i+0.5<=shown) { ctx.save(); ctx.beginPath(); ctx.rect(170+i*26,40,10,21); ctx.clip(); drawStar(170+i*26,40,true,3); ctx.restore(); } }
+  text(`+$${R.pay+R.tip}`,236,72,P.lime,16,'center',P.k);
+  text(R.name.toUpperCase(),236,96,P.white,8,'center');
+}
+function drawUpgrades(t){
+  drawBeach(t,'day');
+  rect(96,70,130,62,P.red); rect(88,62,146,10,P.orange); rect(100,70,6,62,P.plum);
+  rect(150,92,22,40,P.k); rect(186,86,28,18,P.sky); rect(118,86,24,18,P.sky);
+  text('SUPPLY',160,74,P.sun,8,'center',P.k);
+  for(let i=0;i<4;i++){ rect(232+i*14,68,8,64,i%2?P.white:P.sky); }
+}
+
+/* ============================== SURF ENGINE ============================== */
+const SKIES = {
+  day:{b:[P.blue,P.sky,P.sky,P.aqua],sea:P.blue,sun:'small',land:P.teal},
+  dusk:{b:[P.plum,P.red,P.orange,P.sun],sea:P.navy,sun:'big',land:P.plum},
+  tropic:{b:[P.navy,P.blue,P.sky,P.aqua],sea:P.blue,sun:'small',land:P.green},
+  storm:{b:[P.dusk,P.slate,P.slate,P.mist],sea:P.dusk,sun:'none',land:P.k},
+};
+const buf=document.createElement('canvas'); buf.width=W; buf.height=H;
+const bctx=buf.getContext('2d'); const img=bctx.createImageData(W,H); const pix=new Uint32Array(img.data.buffer);
+
+function startSession(){
+  const c=S.customer, a=ARCH_BY[c.arch], sp=SPOTS[c.spot];
+  const r=calcStats(S.board), st=r.s, sz=c.size, kind=sp.kind, ft=S.board.L/12;
+  const km={mushy:0.8,clean:1,hollow:1.12}[kind];
+  surf={stats:st, board:{...S.board}, ft, weight:r.weight, size:sz, kind, spot:c.spot, style:a.style,
+    cs:(34+sz*3.2)*km, Hmax:clamp(34+sz*5.5,40,128), power:{mushy:0.75,clean:1,hollow:1.15}[kind], steep:{mushy:0.7,clean:1,hollow:1.2}[kind],
+    need:(22+sz*2.6)*(kind==='mushy'?0.9:1), sky:SKIES[sp.sky], wave:0, scores:[], pops:[], parts:[], cam:0, sizeMult:clamp(Math.sqrt(sz/4),0.75,2.2),
+    // steering feel: long, heavy boards answer the rail slowly; short, light boards snap around
+    resp:clamp((2+st.turn*0.55)/(1+Math.max(0,ft-6)*0.22+r.weight/60),0.6,8),
+    turnRate:(0.75+st.turn*0.14)/(1+Math.max(0,ft-7)*0.12),
+    isLong:ft>=8, tips:{}};
+  surf.pScale=Math.sqrt(56/surf.Hmax);
+  surf.skyRows=[]; const b=surf.sky.b;
+  for(let y=0;y<H;y++){ const bi=Math.min(3,Math.floor(y/(HY/4))); const near=bi>0 && (y%Math.round(HY/4))<2; surf.skyRows.push([u32(b[bi]),near?u32(b[bi-1]):u32(b[bi])]); }
+  surf.uSea=u32(surf.sky.sea); surf.uLand=u32(surf.sky.land);
+  setScreen('surf'); beginWave();
+}
+function beginWave(){
+  const sv=surf; sv.wave++;
+  Object.assign(sv,{phase:'paddle',t:0,ps:0,sw:-90,swA:6,morph:0,points:0,pops:[],parts:[],msg:`WAVE ${sv.wave} OF 3`,msgT:2.2,
+    x:0,cx:-46,v:0,p:0.92,vp:-1.2,dir:-1,ext:0.92,ang:0,chatter:0,noseT:0,walk:0,strain:0,hang5:false,hang10:false,tubeT:0,grab:false,air:null,
+    floatT:0,floatMsg:false,spin:null,spins:0,spinCD:0,holdA:0,lastTapA:-9,lastTapLen:9,pose:null,poseT:0,combo:0,comboT:0,
+    made:false,cutCD:0,pumpCD:0,stallT:0,aBuf:0,endNote:'',stroke:0,strokePh:0,waveT:0,claimed:false,wb:null,
+    waveDur:surf.spot==='bombie'?rnd(15,19):rnd(20,26)});
+}
+function faceH(dd){ return surf.Hmax*clamp(1-Math.max(0,dd-110)/320,0.32,1); }
+function curlSX(){ return RX-(surf.x-surf.cx); }
+function bumpTop(x){ const sv=surf; return TY-5-sv.swA*Math.exp(-Math.pow((x-sv.sw)/(38+sv.swA*0.3),2)); }
+function wallTop(dd){ const Hm=surf.Hmax; if(dd>=0) return TY-faceH(dd); const u=-dd/(Hm*0.75); return u<1?TY-Hm*Math.sqrt(1-u*u):TY-Hm*0.42; }
+function topAt(x){ const m=surf.morph; if(m<=0) return bumpTop(x); const w=wallTop(x-curlSX()); return m>=1?w:bumpTop(x)*(1-m)+w*m; }
+function pocketMult(d){ return d<70?1.5:d<160?1:0.6; }
+function popText(txt,c=P.sun){ surf.pops.push({txt,c,t:0}); }
+function award(kind,base,label,c){
+  const sv=surf; let m=pocketMult(sv.x-sv.cx)*(sv.style[kind]||1)*sv.sizeMult;
+  if(kind!=='make' && kind!=='claim'){ m*=1+Math.min(sv.combo,6)*0.12; sv.combo++; sv.comboT=2.6; }
+  const pts=Math.max(1,Math.round(base*m)); sv.points+=pts;
+  popText(`${label} +${pts}`,c||P.sun); sfx.trick(Math.min(6,Math.floor(pts/120))); return pts;
+}
+function spray(n,x,y,dir=-1){ if(REDUCED) n=Math.ceil(n/3); for(let i=0;i<n;i++) surf.parts.push({wx:surf.x+(x-RX),y,vx:rnd(-50,20)+dir*20,vy:rnd(-70,-20),t:0,life:rnd(0.4,0.8),c:pick([P.white,P.aqua,P.white])}); }
+function riderY(){ const sv=surf; if(sv.phase==='ride'||sv.phase==='rideEnd') return TY-sv.p*faceH(Math.max(0,sv.x-sv.cx)); return TY-sv.p*(TY-topAt(RX)); }
+function wipe(msg){
+  const sv=surf; if(sv.phase!=='ride' && sv.phase!=='pop' && sv.phase!=='takeoff') return;
+  const y=riderY();
+  sv.phase='wipe'; sv.t=0; sv.endNote=msg; sv.air=null; sv.spin=null; sfx.wipe(); if(!REDUCED) shake=0.5;
+  sv.wy=y; sv.wb={x:RX,y:y,vx:rnd(10,40),vy:rnd(-110,-70),rot:sv.ang,vr:rnd(6,12)};
+  spray(30,RX,y);
+}
+function judge(pts){ return Math.round(100*(1-Math.exp(-pts/1900)))/10; }
+function finishWave(){
+  const sv=surf; sv.scores.push({pts:Math.round(sv.points),judge:judge(sv.points),note:sv.endNote});
+  if(sv.wave<3){ sv.phase='between'; sv.t=0; } else endSession();
+}
+function tip(id,txt){ const sv=surf; if(sv.tips[id]) return; sv.tips[id]=true; sv.hint={txt,t:0}; }
+
+function updateSurf(dt){
+  const sv=surf; const st=sv.stats; sv.t+=dt; sv.msgT-=dt;
+  sv.aBuf=Math.max(0,sv.aBuf-dt); if(pressed.a) sv.aBuf=0.3;
+  if(sv.hint){ sv.hint.t+=dt; if(sv.hint.t>3) sv.hint=null; }
+  for(const p of sv.parts){ p.t+=dt; p.wx+=p.vx*dt; p.y+=p.vy*dt; p.vy+=160*dt; }
+  sv.parts=sv.parts.filter(p=>p.t<p.life);
+  for(const p of sv.pops){ p.t+=dt; } sv.pops=sv.pops.filter(p=>p.t<1.4);
+  if(sv.phase==='paddle'){
+    sv.cam+=(6+sv.ps*0.5)*dt; sv.sw+=92*dt; sv.swA=6+clamp((sv.sw+90)/260,0,1)*sv.Hmax*0.45;
+    sv.stroke=Math.max(0,sv.stroke-dt); if(sv.stroke>0) sv.strokePh+=dt*4.5;
+    if(consume('a')||consume('right')){ sv.ps=Math.min(sv.ps+4+st.paddle*1.6,20+st.paddle*9); sfx.paddle(); sv.stroke=0.28; spray(3,RX+3,TY-6,1); }
+    sv.ps*=Math.exp(-0.9*dt);
+    if(sv.ps>sv.need*0.5 && Math.random()<0.4) sv.parts.push({wx:sv.x-14+rnd(-2,2),y:bumpTop(RX-14)+rnd(0,2),vx:-30,vy:0,t:0,life:0.3,c:P.white});
+    if(Math.abs(sv.sw-RX)<26 && sv.ps>=sv.need){ sv.phase='pop'; sv.t=0; sv.popWin=0.75+st.stab*0.08; sfx.pop(); popText('CAUGHT IT!',P.lime); }
+    else if(sv.sw>RX+26){ sv.phase='missed'; sv.t=0; sv.endNote = sv.ps<sv.need*0.6 ? 'Missed it. Paddle harder as the swell arrives.' : 'Missed it. More paddle power (volume, length) would help.'; beep(200,0.3,'triangle',0.06,-120); }
+  } else if(sv.phase==='pop'){
+    // the swell picks you up and stands into a wall; you're still lying down
+    sv.sw+=(RX-sv.sw)*Math.min(1,dt*4); sv.swA=Math.min(sv.Hmax,sv.swA+sv.Hmax*1.2*dt);
+    sv.morph=Math.min(0.7,sv.morph+dt*0.9); sv.p=0.92; sv.ang+=(0.35-sv.ang)*Math.min(1,dt*5);
+    sv.cam+=30*dt; if(Math.random()<0.5) spray(1,RX+12,riderY()+2,1);
+    if(consume('up')){ sv.phase='takeoff'; sv.t=0; sv.v=sv.cs*0.95; sv.vp=-0.6; sfx.pop(); spray(10,RX,riderY(),1); }
+    else if(sv.t>sv.popWin){ wipe('Too slow on the pop-up. The wave pitched you over the falls.'); }
+  } else if(sv.phase==='takeoff'){
+    // push-up, tuck the feet, rise: about half a second while the board drops down the face
+    const T=0.55;
+    sv.morph=Math.min(1,sv.morph+dt*0.8); sv.p=Math.max(0.68,sv.p-dt*0.45);
+    sv.x+=sv.v*dt*0.6; sv.cx+=sv.cs*dt*0.6; sv.cam=sv.x;
+    sv.ang+=(0.42-sv.ang)*Math.min(1,dt*6);
+    if(Math.random()<0.6) spray(1,RX+rnd(-8,8),riderY()+2,-1);
+    if(sv.t>=T){
+      sv.morph=1;
+      const steepness=sv.steep*Math.sqrt(sv.size/6)*1.6, handle=sv.board.rocker*0.5+st.hold*0.15;
+      const pearl=(sv.kind==='hollow'||sv.size>=8)?clamp((steepness-handle)*0.3,0,0.75):0;
+      const wobble=st.stab<2.5?0.15*(2.5-st.stab):0;
+      sv.phase='ride'; sv.t=0; sv.vp=-1.0; sv.dir=-1; sv.ext=sv.p;
+      if(Math.random()<pearl) wipe(sv.board.rocker<=2?'Pearled on the drop. Flat rocker dug the nose in.':'Late drop on a steep wave. Ate it.');
+      else if(Math.random()<wobble) wipe('Lost balance on the takeoff. The board is too tippy.');
+    }
+  } else if(sv.phase==='ride'){
+    updateRide(dt);
+  } else if(sv.phase==='wipe'){
+    sv.x+=sv.cs*0.4*dt; sv.cx+=sv.cs*dt; sv.morph=1;
+    const b=sv.wb; if(b){ b.x+=b.vx*dt; b.y+=b.vy*dt; b.vy+=200*dt; b.rot+=b.vr*dt; if(b.y>TY-2){ b.y=TY-2; b.vy*=-0.25; b.vr*=0.5; b.vx*=0.6; } }
+    if(sv.t>2.4) finishWave();
+  } else if(sv.phase==='rideEnd'){
+    // kick out over the back of the wave; tap A for a claim
+    sv.x+=sv.v*0.5*dt; sv.cx+=sv.cs*dt; sv.cam=sv.x;
+    sv.p=Math.min(1.6,sv.p+dt*1.2); sv.ang+=(-0.6-sv.ang)*Math.min(1,dt*6);
+    if(consume('a') && !sv.claimed && sv.t<1.4){ sv.claimed=true; award('claim',60+sv.points*0.04,'CLAIM!',P.lime); }
+    if(sv.t>2.4) finishWave();
+  } else if(sv.phase==='missed'){
+    sv.sw+=92*dt; sv.cam+=6*dt; if(sv.t>2.2){ sv.points=0; finishWave(); }
+  } else if(sv.phase==='between'){
+    if(sv.t>1.6) beginWave();
+  }
+}
+function updateRide(dt){
+  const sv=surf, st=sv.stats; sv.waveT+=dt;
+  let d=sv.x-sv.cx; const Hc=faceH(Math.max(0,d));
+  sv.comboT-=dt; if(sv.comboT<=0) sv.combo=0;
+  if(sv.poseT>0){ sv.poseT-=dt; if(sv.poseT<=0) sv.pose=null; }
+  // A-button timing: hold = noseride, double tap = spinner
+  if(pressed.a){
+    if(tick-sv.lastTapA<0.4 && sv.lastTapLen<0.2 && !sv.spin && tick>(sv.spinCD||0) && sv.p>0.25 && sv.p<0.85 && sv.tubeT<=0 && sv.noseT<=0){
+      sv.spin={t:0,dur:sv.isLong?0.75:0.6}; popText('SPINNER...',P.white); beep(700,0.2,'triangle',0.04,300);
+    }
+    sv.lastTapA=tick;
+  }
+  if(keys.a) sv.holdA+=dt; else { if(sv.holdA>0) sv.lastTapLen=sv.holdA; sv.holdA=0; }
+  if(sv.air){
+    sv.air.t+=dt; sv.x+=sv.v*dt; sv.cx+=sv.cs*dt; sv.cam=sv.x; sv.ang=Math.sin(sv.air.t/sv.air.dur*Math.PI*2)*0.9;
+    if(sv.air.t>=sv.air.dur){
+      const chance=clamp(0.3+st.turn*0.065-Math.max(0,sv.ft-6.5)*0.25+st.stab*0.015,0.03,0.95);
+      const dur=sv.air.dur; sv.air=null;
+      if(Math.random()<chance){ sv.p=0.86; sv.vp=-1; sv.v*=0.85; sv.dir=-1; sv.ext=1; sv.ang=0.3;
+        award('air',(350+dur*500)*(0.5+st.turn*0.06), dur<0.6?'AIR!':dur<0.8?'AIR REVERSE!':'FULL ROTATION!', P.lime); sfx.big(); spray(16,RX,TY-0.86*Hc); }
+      else { sv.p=0.8; wipe(sv.ft>7?'Tried to launch a longboard. It did not end well.':'Blew the landing.'); }
+    }
+    return;
+  }
+  // spinner: a full 360 on your feet while the board trims
+  if(sv.spin){
+    sv.spin.t+=dt;
+    if(sv.spin.t>=sv.spin.dur){
+      const ok=clamp(0.45+st.stab*0.06+(sv.isLong?0.15:0)-sv.chatter*0.5,0.1,0.97); sv.spin=null;
+      sv.spinCD=tick+1.2; sv.spins=(sv.spins||0)+1;
+      if(Math.random()<ok){ award('spin',(160+st.stab*25)*(sv.isLong?1.3:1)*Math.pow(0.7,sv.spins-1),'SPINNER!',P.lime); sfx.big(); }
+      else { wipe('Lost your footing halfway through the spinner.'); return; }
+    }
+  }
+  // noseride
+  const canNose = keys.a && sv.holdA>0.18 && sv.p<0.85 && sv.p>0.3 && sv.tubeT<=0 && !sv.spin;
+  if(canNose && (sv.noseT>0 || Math.abs(sv.vp)<0.6)){ sv.noseT+=dt; sv.walk=Math.min(1,sv.walk+dt*(sv.isLong?1.1:1.8)); }
+  else { if(sv.noseT>0.6) popText(`NOSERIDE ${sv.noseT.toFixed(1)}S`,P.sun); sv.noseT=0; sv.hang5=false; sv.hang10=false; sv.walk=Math.max(0,sv.walk-dt*(sv.isLong?1.4:2.2)); }
+  const nosing=sv.noseT>0;
+  // steering with inertia
+  const target = (nosing||sv.spin) ? -0.12 : keys.up ? sv.turnRate : keys.down ? -sv.turnRate : -0.18;
+  sv.vp += (target-sv.vp)*Math.min(1,dt*sv.resp);
+  sv.p += sv.vp*sv.pScale*dt;
+  // lip: air, floater
+  if(sv.p>=1){
+    sv.p=1;
+    if(sv.vp>0.45 && sv.v>sv.cs+6 && (keys.a||sv.aBuf>0) && !nosing && !sv.spin){
+      sv.air={t:0,dur:clamp(0.45+(sv.v-sv.cs)/140,0.45,1),h:10+(sv.v-sv.cs)*0.15}; sv.aBuf=0; spray(14,RX,TY-Hc); beep(880,0.15,'square',0.04,400); return;
+    }
+    if(keys.up && d<70){
+      sv.floatT+=dt; sv.v-=14*dt;
+      if(sv.floatT>0.25 && !sv.floatMsg){ sv.floatMsg=true; popText('FLOATING...',P.white); }
+      if(sv.floatT>1.3 || (sv.v<sv.cs*0.7 && sv.floatT>0.5)){ wipe('Stalled on top of the floater and went over with the lip.'); return; }
+    }
+  }
+  if(sv.p<0.95 && sv.floatT>0){ if(sv.floatT>0.3) award('float',(140+sv.floatT*260)*(0.5+st.turn*0.05),'FLOATER',P.lime); sv.floatT=0; sv.floatMsg=false; }
+  if(sv.p<=0){ sv.p=0; if(sv.vp<0) sv.vp=0; }
+  // direction changes = turns
+  const ns = sv.vp>0.3?1:sv.vp<-0.3?-1:0;
+  if(ns!==0 && ns!==sv.dir){
+    if(sv.dir===1 && ns===-1 && sv.p>0.68 && sv.p-sv.ext>0.4){
+      if(keys.left && st.turn>=5){ award('slide',(90+sv.v*0.8)*(0.3+st.turn*0.09),'TAIL SLIDE',P.orange); sv.v*=0.82; spray(18,RX-6,TY-sv.p*Hc,1); sv.pose='tube'; sv.poseT=0.35; }
+      else { award('snap',(70+sv.v*0.9)*(0.35+st.turn*0.075), d<60?'OFF THE LIP':'TOP TURN', d<60?P.lime:P.sun); sv.v*=0.92; spray(12,RX,TY-sv.p*Hc,1); }
+    } else if(sv.dir===-1 && ns===1 && sv.p<0.32 && sv.ext-sv.p>0.4){
+      if(keys.a && sv.isLong){ award('bottom',(50+sv.v*0.6)*(0.5+st.hold*0.04+st.turn*0.03)*1.6,'DROP-KNEE TURN',P.aqua); sv.pose='dropknee'; sv.poseT=0.6; }
+      else award('bottom',(50+sv.v*0.6)*(0.5+st.hold*0.04+st.turn*0.03),'BOTTOM TURN',P.aqua);
+      spray(8,RX,TY-sv.p*Hc,-1);
+    }
+    sv.ext=sv.p; sv.dir=ns;
+  }
+  // speed
+  const gK=1.4*Math.sqrt(56/sv.Hmax)*sv.steep;
+  sv.v += -sv.vp*sv.pScale*Hc*gK*dt;
+  const pf=clamp(1.15-Math.max(0,d-50)/260,0.35,1.15);
+  let trim=sv.cs*(0.72+st.glide*0.05)*pf*Math.sqrt(sv.power);
+  if(nosing) trim*=1+st.nose*0.012;
+  if(sv.p<0.04) trim*=0.75;
+  sv.v += (trim-sv.v)*dt*0.6;
+  sv.pumpCD-=dt;
+  if(consume('right') && sv.pumpCD<=0 && !nosing && sv.p>0.15 && sv.p<0.92){
+    const room=clamp(1-(sv.v-trim)/45,0,1); sv.v+=(4+st.turn*1.3)*sv.power*room; sv.pumpCD=sv.isLong?0.4:0.26; sfx.pump(); spray(3,RX-6,TY-sv.p*Hc,-1);
+  }
+  if(keys.left && !nosing){ sv.v-=55*dt; sv.stallT+=dt; } else sv.stallT=0;
+  sv.cutCD-=dt;
+  if(keys.left && d>115 && sv.v>sv.cs*0.85 && sv.cutCD<=0 && sv.stallT>0.3){
+    const round=sv.v>sv.cs*1.25;
+    award('cut',(90+sv.v*0.7)*(0.45+st.turn*0.07)*(round?1.5:1),round?'ROUNDHOUSE CUTBACK':'CUTBACK',P.orange); sv.cutCD=1.6; sv.v*=0.8; spray(14,RX,TY-sv.p*Hc,1);
+  }
+  sv.v=Math.max(sv.v,8);
+  // chatter / spin-out
+  const vmax=trim+sv.Hmax*gK*(0.4+st.hold*0.07);
+  if(sv.v>vmax) sv.chatter+=(sv.v-vmax)/25*dt*1.3; else sv.chatter=Math.max(0,sv.chatter-dt*0.7);
+  if(sv.chatter>1){ wipe(st.hold<3?'Spun out. Not enough hold at that speed.':'Chattered and caught a rail at full speed.'); return; }
+  if(sv.chatter>0.45) tip('chat','TOO FAST! CLIMB OR HOLD ← TO SCRUB SPEED');
+  // move
+  sv.x+=sv.v*dt; sv.cx+=sv.cs*dt; sv.cam=sv.x; d=sv.x-sv.cx;
+  if(d>170) tip('shoulder','ON THE SHOULDER: HOLD ← TO CUT BACK');
+  if(sv.isLong && sv.waveT>4 && !nosing) tip('nose','LONGBOARD: HOLD A MID-FACE TO NOSERIDE');
+  // board angle eases toward the line you're riding; long boards swing slower
+  const tAng=clamp(Math.atan2(-sv.vp*sv.pScale*Hc,Math.max(sv.v,20)),-0.8,0.8);
+  sv.ang+=(tAng-sv.ang)*Math.min(1,dt*(1.5+sv.resp*1.2));
+  // noseride scoring
+  if(nosing){
+    sv.points += (20+st.nose*14)*pocketMult(d)*(sv.style.nose||1)*sv.sizeMult*dt;
+    sv.strain += dt*(st.nose>=8?0.08:Math.max(0.15,(7-st.nose)*0.25))*(sv.kind==='hollow'?1.4:1);
+    if(sv.noseT>1 && !sv.hang5){ sv.hang5=true; award('nose',80+st.nose*12,'HANG FIVE',P.sun); }
+    if(sv.noseT>2.5 && !sv.hang10 && st.nose>=5){ sv.hang10=true; award('nose',200+st.nose*30,'HANG TEN!',P.lime); sfx.big(); }
+    if(sv.strain>=1){ wipe(st.nose<4?'Pearled. That nose can\'t hold your weight.':'Stayed on the nose too long and pearled.'); return; }
+  } else sv.strain=Math.max(0,sv.strain-dt*0.6);
+  // tube / whitewater
+  const hollow=sv.kind==='hollow'; sv.grab = keys.a && sv.tubeT>0;
+  const depth=sv.Hmax*0.35+st.hold*1.2+(sv.grab?8:0);
+  if(hollow && d<8 && sv.p>0.12 && sv.p<0.7){
+    if(d<-depth){ wipe('The lip landed on you deep in the barrel.'); return; }
+    if(sv.tubeT===0) tip('tube','IN THE BARREL! HOLD A TO GRAB RAIL');
+    sv.tubeT+=dt; sv.points+=160*(0.6+st.hold*0.04)*(sv.grab?1.35:1)*(sv.style.tube||1)*sv.sizeMult*dt;
+  } else {
+    if(sv.tubeT>0.4){ award('tube',300*sv.tubeT,`SPIT OUT! ${sv.tubeT.toFixed(1)}S`,P.aqua); sfx.big(); spray(20,RX-10,TY-sv.p*Hc,1); }
+    sv.tubeT=0;
+    if(d<(hollow?-4:-2)){ wipe(sv.kind==='mushy'?'The whitewater swallowed you. Keep ahead of the foam.':'The curl caught you. You need more speed.'); return; }
+  }
+  if(!sv.made && sv.waveT>1.6){ sv.made=true; award('make',60+sv.size*25, sv.size>=12?'MADE THE DROP!':'CLEAN TAKEOFF',P.white); }
+  if(sv.waveT>sv.waveDur){ award('make',100+sv.size*10,'KICK OUT',P.white); sv.phase='rideEnd'; sv.t=0; sv.endNote='Rode it to the end and kicked out clean.'; tip('claim','TAP A TO CLAIM IT'); }
+}
+function renderSea(){
+  const sv=surf, Hm=sv.Hmax, rows=sv.skyRows, m=sv.morph;
+  const cSX=curlSX();
+  const fr=Math.floor(tick*12), cam=Math.floor(sv.cam), sunBig=sv.sky.sun==='big', sunSmall=sv.sky.sun==='small';
+  const hollow=sv.kind==='hollow', tw=Hm*0.75, lipT=4+Math.round(Hm*0.05);
+  const dis=clamp((m-0.35)/0.65,0,1)*100;
+  const Uw=U.white,Ua=U.aqua,Us=U.sky,Ub=U.blue,Un=U.navy,Um=U.mist,Ut=U.teal;
+  const faceC=(f,x,y)=>{ const dith=(x+y)&1; let c;
+    if(f<0.05) c=Uw; else if(f<0.12) c=dith?Uw:Ua; else if(f<0.3) c=Ua; else if(f<0.34) c=dith?Ua:Us; else if(f<0.55) c=Us; else if(f<0.59) c=dith?Us:Ub; else if(f<0.8) c=Ub; else if(f<0.84) c=dith?Ub:Un; else c=Un;
+    if(((y*5+x+cam)%37)===0 && f>0.12) c=(c===Un?Ub:c===Ub?Us:Ua); return c; };
+  const water=(x,y)=>((y+((x+cam)>>3))%7===0)?Ub:Un;
+  for(let x=0;x<W;x++){
+    const dd=x-cSX;
+    const foamH=Hm*0.42*(0.85+0.15*Math.sin(x*0.3+tick*6));
+    // the wall's own shape at this column (used once the swell has stood up)
+    let wMode=0, arc=0;
+    if(dd>=0){ wMode=0; arc=TY-faceH(dd); } else { const u=-dd/tw; if(u<1){ wMode=1; arc=TY-Hm*Math.sqrt(1-u*u); } else { wMode=2; arc=TY-foamH; } }
+    let lip;
+    if(m>=1) lip=arc; else { const b=TY-5-sv.swA*Math.exp(-Math.pow((x-sv.sw)/(38+sv.swA*0.3),2)); lip = m<=0 ? b : b*(1-m)+arc*m; }
+    const lx=x+cam*0.05; let lh=(7+5*Math.sin(lx*0.015)+3*Math.sin(lx*0.043))*(Math.sin(lx*0.006)>0.1?1:0); lh=Math.max(0,Math.round(lh));
+    const span=Math.max(6,TY-lip), fOff=0.1*(1-m);
+    for(let y=0;y<H;y++){
+      let bg;
+      if(y<HY){
+        const r=rows[y]; bg=((x+y)&1)?r[1]:r[0];
+        if(sunBig){ const dx=x-250, dy=y-(HY-2); if(dx*dx+dy*dy<26*26 && !(y>HY-18 && (y%4)<2)) bg=y<HY-14?U.sun:Uw; }
+        else if(sunSmall){ const dx=x-262, dy=y-22; if(dx*dx+dy*dy<64) bg=Uw; }
+        if(y>=HY-lh) bg=sv.uLand;
+      } else { bg=sv.uSea; if(hash(x+cam,y,Math.floor(tick*3))%211===0) bg=Ua; if(y===HY) bg=Um; }
+      // curl pixels fade in with a dissolve while the swell stands up
+      const curlOn = wMode!==0 && (m>=1 || (hash(x,y,3)%100)<dis);
+      let c;
+      if(!curlOn){
+        if(y<lip) c=bg; else if(y<TY) c=faceC((y-lip)/span*(1-fOff)+fOff,x,y);
+        else c=(y===TY && wMode===0 && m>=1 && hash(x+cam,y,fr)%3===0)?Uw:water(x,y);
+      } else if(wMode===1){
+        if(y<arc) c=bg; else if(y<arc+lipT) c=(y<arc+lipT-1 || ((x+y)&1))?Uw:Ua;
+        else if(y<TY){ if(hollow){ const f=(y-arc)/(TY-arc+1); c = f<0.15?Ut:f<0.7?Un:(hash(x,y,fr)%3===0?Um:Un); if(((y*5+x+cam)%31)===0) c=Ut; }
+          else { const h=hash(x,y,fr)%5; c=h<2?Uw:h<4?Um:Ua; } }
+        else { const h=hash(x,y,fr)%4; c=h===0?Uw:h===1?Um:Un; }
+      } else {
+        if(y<TY-foamH) c=bg; else if(y<TY+8){ const h=hash(x,y,fr)%6; c=h<3?Uw:h<5?Um:Ua; } else c=water(x,y);
+      }
+      pix[y*W+x]=c;
+    }
+  }
+  bctx.putImageData(img,0,0);
+  ctx.drawImage(buf,0,0);
+}
+function drawSurf(t){
+  const sv=surf; if(!sv) return;
+  const shx = shake>0 ? Math.round(rnd(-2,2)) : 0; ctx.translate(shx,0);
+  renderSea();
+  { const cc=sv.spot==='bombie'?P.slate:P.white; [[30,18,24],[140,30,18],[230,12,30]].forEach(([x0,y0,w],i)=>{ const x=((x0-sv.cam*0.06*(1+i*0.3))%380+380)%380-40; rect(x,y0,w,4,cc); rect(x+4,y0-3,w-10,3,cc); rect(x+8,y0+4,w-14,2,cc); }); }
+  const st=sv.stats; const d=sv.x-sv.cx; const Hc=faceH(Math.max(0,d));
+  const bl=clamp(Math.round(sv.ft*3.1),12,52); const bcol=matCols(sv.board.mat);
+  const drawRideBoard=(rx,ry,ang)=>{ const ca=Math.cos(ang), sa=Math.sin(ang);
+    for(let i=-bl/2;i<=bl/2;i++){ const x=rx+i*ca, y=ry+i*sa; rect(x,y,1,1,bcol.base); rect(x,y+1,1,1,bcol.edge); }
+    if(sv.board.fins!=='none'){ rect(rx-(bl/2-3)*ca-sa*2, ry-(bl/2-3)*sa+2,2,2,P.k); } };
+  const ph=sv.phase;
+  if(ph==='paddle'||ph==='missed'){
+    const bob=Math.round(Math.sin(tick*3.2));
+    const ry=bumpTop(RX)+bob; const ang=Math.atan2(bumpTop(RX+6)-bumpTop(RX-6),12);
+    drawRideBoard(RX,ry,ang);
+    drawPerson(RX,ry,OWNER,sv.stroke>0?'paddle':'prone',sv.strokePh);
+    if(sv.stroke>0.2) { rect(RX+5,ry+1,2,1,P.white); rect(RX+8,ry,1,1,P.white); }
+  } else if(ph==='pop'){
+    const ry=riderY(); drawRideBoard(RX,ry,sv.ang);
+    drawPerson(RX,ry,OWNER,'paddle',tick*1.5);
+  } else if(ph==='takeoff'){
+    const ry=riderY(); drawRideBoard(RX,ry,sv.ang);
+    const k=sv.t; const pose=k<0.14?'pushup':k<0.3?'tuck':k<0.44?'rise':'surf';
+    drawPerson(RX+(pose==='pushup'?-1:0),ry,OWNER,pose,tick);
+  } else if(ph==='ride'||ph==='rideEnd'){
+    let ry=riderY(); let ang=sv.ang;
+    if(sv.air){ const k=sv.air.t/sv.air.dur; ry=TY-Hc-sv.air.h*Math.sin(Math.PI*k); }
+    if(ph==='rideEnd' && sv.p>1){ ry=TY-Hc-(sv.p-1)*40+Math.pow(Math.max(0,sv.p-1.3),2)*120; }
+    if(sv.chatter>0.3 && !REDUCED) ry+=Math.round(rnd(-1,1)*sv.chatter*2);
+    const hidden = ph==='rideEnd' && sv.p>1.5;
+    if(!hidden){
+      drawRideBoard(RX,ry,ang);
+      const wo=(sv.walk*bl*0.36)-1; const fx=RX+wo*Math.cos(ang), fy=ry+wo*Math.sin(ang);
+      let pose = 'surf', f=tick, flip=false;
+      if(ph==='rideEnd' && sv.claimed) pose='claim';
+      else if(sv.spin){ pose='spin'; f=sv.spin.t/sv.spin.dur*0.5; }
+      else if(sv.pose) pose=sv.pose;
+      else if(sv.noseT>0) pose = sv.walk<0.98 ? 'walkboard' : 'nose';
+      else if(sv.tubeT>0) pose = sv.grab?'grab':'tube';
+      else if(sv.floatT>0) pose='tube';
+      drawPerson(fx,fy,OWNER,pose,f,flip);
+    }
+  } else if(ph==='wipe'){
+    const b=sv.wb; if(b) drawRideBoard(b.x,b.y,b.rot);
+    if(sv.t<1.1){ const k=Math.min(1,sv.t/0.9); drawPerson(RX+6*k,sv.wy+(TY-sv.wy)*k*k,OWNER,'tumble',sv.t); }
+    else drawPerson(RX-8-(sv.t-1.1)*6,TY-1+Math.round(Math.sin(sv.t*4)),OWNER,'swim',sv.t);
+  }
+  for(const p of sv.parts){ const x=p.wx-sv.x+RX; rect(x,p.y,1,1,p.c); }
+  ctx.setTransform(2,0,0,2,0,0);
+  let py=0; for(const p of sv.pops){ text(p.txt,RX,60-p.t*18-py,p.c,8,'center'); py+=11; }
+  // HUD
+  ctx.globalAlpha=0.75; rect(0,0,W,13,P.k); ctx.globalAlpha=1;
+  text(`WAVE ${Math.min(sv.wave,3)}/3`,4,3,P.sun);
+  text(`${Math.round(sv.points)}`,106,3,P.white);
+  text(sv.scores.map(s=>s.judge.toFixed(1)).join(' '),170,3,P.aqua);
+  if(ph==='ride'){
+    const spd=clamp(sv.v/(sv.cs*2),0,1); text('SPD',246,3,P.mist); rect(272,4,44,6,P.dusk); rect(272,4,Math.round(44*spd),6,sv.v>sv.cs?P.lime:P.orange); rect(272+22,3,1,8,P.white);
+    let yy=16;
+    if(d<70){ text('POCKET X1.5',4,yy,P.aqua); yy+=10; }
+    if(sv.combo>=2){ text(`COMBO X${(1+Math.min(sv.combo,6)*0.12).toFixed(2)}`,4,yy,P.lime); yy+=10; }
+    if(sv.chatter>0.05){ text('CHATTER',4,yy,P.red); rect(64,yy+1,40,5,P.dusk); rect(64,yy+1,Math.round(40*clamp(sv.chatter,0,1)),5,P.red); yy+=10; }
+    if(sv.noseT>0){ text('NOSE',4,yy,P.sun); rect(42,yy+1,40,5,P.dusk); rect(42,yy+1,Math.round(40*clamp(sv.strain,0,1)),5,P.orange); yy+=10; }
+    if(sv.tubeT>0){ text(`BARREL ${sv.tubeT.toFixed(1)}S`,4,yy,P.aqua); yy+=10; }
+    const left=Math.max(0,sv.waveDur-sv.waveT); rect(246,14,70,3,P.dusk); rect(246,14,Math.round(70*left/sv.waveDur),3,P.white);
+  }
+  if(sv.hint && ph==='ride'){ ctx.globalAlpha=0.8; rect(0,156,W,12,P.k); ctx.globalAlpha=1; text(sv.hint.txt,W/2,158,P.sun,8,'center'); }
+  if(ph==='paddle'){
+    text(sv.msgT>0?sv.msg:'PADDLE! TAP A OR →',W/2,24,P.white,8,'center');
+    const mx=Math.max(sv.need*1.3,20+st.paddle*9); const bw=120, bx=W/2-bw/2;
+    rect(bx-1,38,bw+2,9,P.k); rect(bx,39,Math.round(bw*clamp(sv.ps/mx,0,1)),7,sv.ps>=sv.need?P.lime:P.sky);
+    rect(bx+Math.round(bw*sv.need/mx),36,1,13,P.sun);
+    text('NEED',bx+Math.round(bw*sv.need/mx),51,P.sun,8,'center');
+  }
+  if(ph==='pop'){ if(Math.floor(tick*8)%2===0) text('POP UP! PRESS ↑',W/2,30,P.lime,8,'center'); rect(W/2-40,44,Math.round(80*clamp(1-sv.t/sv.popWin,0,1)),4,P.lime); }
+  const box=(l1,l2,note)=>{ const ls=note?wrap(note,30).slice(0,3):[]; const hh=40+ls.length*11; rect(24,56,272,hh,P.k); rect(26,58,268,hh-4,P.navy); text(l1,W/2,64,P.sun,8,'center'); if(l2) text(l2,W/2,78,P.white,8,'center'); ls.forEach((l,i)=>text(l,W/2,92+i*11,P.mist,8,'center')); };
+  if(ph==='wipe' && sv.t>0.9) box('WIPEOUT!',`SCORE ${judge(sv.points).toFixed(1)}`, sv.endNote);
+  if(ph==='rideEnd' && sv.t>1.0) box(sv.claimed?'CLAIMED IT!':'NICE RIDE!',`SCORE ${judge(sv.points).toFixed(1)}`,'Kicked out clean.');
+  if(ph==='missed' && sv.t>0.3) box('MISSED IT','SCORE 0.0',sv.endNote);
+  if(ph==='between') box(`WAVE ${sv.wave+1} OF 3`,'PADDLING BACK OUT...',null);
+  ctx.globalAlpha=0.7; rect(0,170,W,10,P.k); ctx.globalAlpha=1;
+  text(`${SPOTS[sv.spot].name.toUpperCase()} ${sv.size}FT`,4,171,P.mist);
+  text(boardName(sv.board).toUpperCase(),316,171,P.sun,8,'right');
+}
+function wrap(s,n){ const w=s.split(' '); const out=[]; let l=''; for(const x of w){ if((l+' '+x).trim().length>n){ out.push(l.trim()); l=x; } else l+=' '+x; } if(l.trim()) out.push(l.trim()); return out; }
+
+function endSession(){
+  const sv=surf, c=S.customer, a=ARCH_BY[c.arch], st=calcStats(S.board).s;
+  const parts=a.crit.map(cr=>({cr,s:cr.f(S.board,st)}));
+  const tw=parts.reduce((p,x)=>p+x.cr.w,0); const fit=parts.reduce((p,x)=>p+x.cr.w*x.s,0)/tw;
+  const judges=sv.scores.map(s=>s.judge); const avg=judges.reduce((p,x)=>p+x,0)/judges.length;
+  const stars=clamp(Math.round((fit*0.8+avg/10*0.2)*10)/2,0.5,5);
+  const pay=Math.round(a.price*(0.2+0.8*fit)); const tip=Math.round(judges.reduce((p,x)=>p+x,0)*3*(stars/5));
+  const bad=parts.filter(x=>x.s<0.6).sort((p,q)=>p.s-q.s||q.cr.w-p.cr.w).slice(0,2).map(x=>x.cr.bad);
+  const good=parts.filter(x=>x.s>=0.9).sort((p,q)=>q.cr.w-p.cr.w).slice(0,2).map(x=>x.cr.good);
+  const surfLine= avg>=7?'Watching you surf it was unreal. Telling all my friends.': avg>=4.5?'Fun session. That board can go.': avg>=2?'Rough session out there, but I get the idea.':'Yikes. That test ride did not inspire confidence.';
+  S.money+=pay+tip; S.ratings.push(stars); S.served[a.id]=Math.max(S.served[a.id]||0,stars);
+  S.rack.unshift({...S.board}); S.rack=S.rack.slice(0,7); S.day++; S.built++;
+  S.last={name:c.name,arch:a.id,look:c.look,spot:c.spot,size:c.size,board:{...S.board},stars,fit,pay,tip,good,bad,surfLine,scores:sv.scores,parts:parts.map(x=>({lbl:critLabel(x.cr),s:x.s}))};
+  S.customer=null;
+  if(!S.legend && ARCH.every(x=>(S.served[x.id]||0)>=4)) { S.legend=true; S.last.legend=true; }
+  save(); sfx.cash(); setScreen('results');
+}
+function critLabel(cr){
+  if(cr.stat) return `${STATS.find(s=>s[0]===cr.stat)[1]} ${cr.target}+`;
+  if(cr.len) return `Length ${fmtLen(cr.len[0])}–${fmtLen(cr.len[1])}`;
+  if(cr.field==='rocker') return 'Rocker 4+';
+  const names={mat:MATERIALS,fins:FINS,tail:TAILS,tpl:TEMPLATES}[cr.field];
+  return cr.vals.map(v=>names[v].name).join(' / ');
+}
+
+/* ============================== PANELS (HTML) ============================== */
+function renderChips(){
+  const rep=repScore();
+  chips.innerHTML = `<span class="chip money">$${S.money}</span><span class="chip">DAY ${S.day}</span><span class="chip rep">REP ${rep?rep.toFixed(1):'–'}★</span>
+   <button class="tbtn" id="tb-nb" data-act="notebook" ${screen==='surf'?'disabled':''}>NOTEBOOK</button><button class="tbtn" id="tb-snd" data-act="mute" aria-pressed="${!muted}">${muted?'SOUND OFF':'SOUND ON'}</button>`;
+}
+function setScreen(s){ screen=s; if(s==='shop' && !S.customer) newCustomer(); if(s==='shop') shopT0 = S.customer && shopT0>0 ? shopT0 : tick; renderPanel(); renderChips(); for(const k in keys) keys[k]=0; }
+function renderPanel(){
+  const fid=document.activeElement && document.activeElement.id;
+  let h='';
+  switch(screen){
+    case 'title': h=panelTitle(); break;
+    case 'shop': h=panelShop(); break;
+    case 'shape': h=panelShape(); break;
+    case 'surf': h=panelSurf(); break;
+    case 'results': h=panelResults(); break;
+    case 'upgrades': h=panelUpgrades(); break;
+    case 'notebook': h=panelNotebook(); break;
+  }
+  panel.innerHTML=h;
+  if(fid){ const el=document.getElementById(fid); if(el) el.focus({preventScroll:true}); }
+}
+function panelTitle(){
+  return `<div class="stack">
+   <h2>Welcome to the shack</h2>
+   <p>You run a tiny surf shop on the coast. Customers walk in with a wish. You shape the board from the blank up: material, outline, length, rocker, tail, rails and fins. Then you take it out at their break and surf it while they watch from the sand.</p>
+   <p class="muted">Start with what the ancient Hawaiians and the 1950s shapers had: solid wood and balsa. Earn your way to polyurethane, soft-tops and epoxy, and to fish, eggs, hybrids and shortboards. The Shaper's Notebook covers the history of every one.</p>
+   <div class="row">
+     <button class="btn" id="b-start" data-act="start">${hasSave?`CONTINUE · DAY ${S.day}`:'OPEN THE SHOP'}</button>
+     ${hasSave?`<button class="btn ghost" id="b-new" data-act="newgame">${confirmNew?'TAP AGAIN TO ERASE SAVE':'NEW GAME'}</button>`:''}
+     <button class="btn blue" id="b-nb" data-act="notebook">SHAPER'S NOTEBOOK</button>
+   </div>
+   <details><summary>HOW TO SURF</summary>${legendHTML()}</details>
+  </div>`;
+}
+function panelShop(){
+  const c=S.customer; if(!c) return '';
+  const a=ARCH_BY[c.arch], sp=SPOTS[c.spot];
+  const quiver=ARCH.map(x=>{ const s=S.served[x.id]; const ok=x.req(S.unlocked); return `<span class="tag ${s>=4?'':'warn'}" title="${esc(x.title)}">${esc(x.title.toUpperCase())} ${s?s.toFixed(1)+'★':ok?'NEW':'LOCKED'}</span>`; }).join('');
+  return `<div class="stack">
+   ${S.legend?`<p class="good">Every kind of surfer in town has left with a four-star board. You're a legend of the coast. Keep shaping!</p>`:''}
+   <div class="card">
+     <div class="row"><h2>${esc(c.name)}</h2><span class="tag">${esc(a.title.toUpperCase())}</span><span class="tag">${esc(sp.name.toUpperCase())} · ${c.size} FT · ${sp.kind.toUpperCase()}</span></div>
+     <p class="quote">“${esc(a.ask)}”</p>
+     <p class="muted small">Pays up to $${a.price} for a perfect board, plus tips for a good test ride at ${esc(sp.name)}, a ${esc(sp.desc)}.</p>
+   </div>
+   <div class="row">
+     <button class="btn" id="b-shape" data-act="toshape">TAKE THE ORDER</button>
+     <button class="btn ghost" id="b-next" data-act="nextcust">NOT TODAY</button>
+     <button class="btn blue" id="b-up" data-act="upgrades">SUPPLY ORDER</button>
+   </div>
+   <details><summary>QUIVER LOG: 4★ FOR EVERY KIND OF SURFER</summary><div class="quiver">${quiver}</div></details>
+  </div>`;
+}
+const FLOAT_LBL=['Thin','Slim','Standard','Thick','Extra float'];
+const ROCKER_LBL=['','Flat','Low','Medium','High','Heavy'];
+function optGroup(label,field,dict,unlockList){
+  const b=S.board;
+  const btns=Object.entries(dict).map(([k,v])=>{
+    const open=!unlockList || unlockList.includes(k);
+    const sub = field==='tpl' ? ` <small>${fmtLen(v.min)}–${fmtLen(v.max)}</small>` : '';
+    if(!open) return `<button class="opt locked" disabled title="Unlock in Supply Order">${esc(v.name)} <i>$${v.unlock}</i></button>`;
+    return `<button class="opt" id="o-${field}-${k.replace('+','p')}" data-act="set" data-f="${field}" data-k="${k}" aria-pressed="${String(b[field])===k}">${esc(v.name)}${sub}</button>`;
+  }).join('');
+  const tip=dict[b[field]] && dict[b[field]].tip;
+  return `<fieldset><legend>${label}</legend><div class="opts" role="group" aria-label="${label}">${btns}</div><div class="tip">${tip?esc(tip):''}</div></fieldset>`;
+}
+function panelShape(){
+  const b=S.board, tp=TEMPLATES[b.tpl], c=S.customer, a=ARCH_BY[c.arch];
+  const fl=b.float||0;
+  return `<div class="stack">
+   <div class="card"><div class="row"><h3>ORDER: ${esc(c.name.toUpperCase())} · ${esc(a.title.toUpperCase())}</h3><span class="tag">${esc(SPOTS[c.spot].name.toUpperCase())} ${c.size}FT</span></div><p class="small">“${esc(a.ask)}”</p></div>
+   <div class="shape-grid">
+    <div class="stack">
+      <div class="step"><span class="num">1</span><div class="stack">
+        ${optGroup('Pick a shape','tpl',TEMPLATES,S.unlocked.tpl)}
+        ${optGroup('Pick a material','mat',MATERIALS,S.unlocked.mat)}
+      </div></div>
+      <div class="step"><span class="num">2</span><fieldset><legend>Tune it</legend>
+        <div class="sl"><label for="r-L" class="small">Length</label><input type="range" id="r-L" data-r="L" min="${tp.min}" max="${tp.max}" step="1" value="${b.L}"><output id="o-L">${fmtLen(b.L)}</output></div>
+        <div class="sl"><label for="r-F" class="small">Float</label><input type="range" id="r-F" data-r="float" min="-2" max="2" step="1" value="${fl}"><output id="o-F">${FLOAT_LBL[fl+2]}</output></div>
+        <div class="sl"><label for="r-R" class="small">Rocker</label><input type="range" id="r-R" data-r="rocker" min="1" max="5" step="1" value="${b.rocker}"><output id="o-R">${ROCKER_LBL[b.rocker]}</output></div>
+        <div class="tip">Longer: paddles and glides, turns slower. More float: stable and easy to paddle. More rocker: turns tighter and handles steep drops, but slower.</div>
+      </fieldset></div>
+      <div class="step"><span class="num">3</span><div class="stack">
+        ${optGroup('Pick a tail','tail',TAILS,null)}
+        ${optGroup('Pick fins','fins',FINS,S.unlocked.fin)}
+      </div></div>
+    </div>
+    <div class="stack" id="readout">${readoutHTML()}</div>
+   </div>
+  </div>`;
+}
+function boardFit(b){
+  const a=ARCH_BY[S.customer.arch], st=calcStats(b).s;
+  const parts=a.crit.map(cr=>({cr,s:cr.f(b,st)}));
+  const tw=parts.reduce((p,x)=>p+x.cr.w,0);
+  return {parts, fit:parts.reduce((p,x)=>p+x.cr.w*x.s,0)/tw};
+}
+function readoutHTML(){
+  const b=S.board, r=calcStats(b), c=S.customer;
+  const {parts,fit}=boardFit(b);
+  const checks=parts.map(p=>{ const k=p.s>=0.9?'ok':p.s>=0.5?'close':'off'; return `<li class="${k}"><span class="mk" aria-hidden="true">${k==='ok'?'✓':k==='close'?'~':'✗'}</span><span>${esc(critLabel(p.cr))}</span></li>`; }).join('');
+  const tg={}; ARCH_BY[c.arch].crit.forEach(cr=>{ if(cr.stat) tg[cr.stat]=cr.target; });
+  const bars=STATS.map(([k,nm,col])=>{ const v=r.s[k]; const cells=Array.from({length:10},(_,i)=>`<span class="c${i<Math.round(v)?' on':''}${tg[k]!==undefined&&i===Math.ceil(tg[k])-1?' tgt':''}"></span>`).join('');
+    return `<div class="stat" style="--col:${col}"><span class="nm">${nm}</span><span class="bar" aria-hidden="true">${cells}</span><span class="vl">${v.toFixed(1)}</span></div>`; }).join('');
+  const cost=blankCost(b); const can=S.money>=cost; const pct=Math.round(fit*100);
+  return `<h3>${esc(c.name.toUpperCase())}'S CHECKLIST</h3>
+   <ul class="checks">${checks}</ul>
+   <div class="fit"><span class="lbl">BOARD FIT</span><span class="fitbar"><span style="width:${pct}%;background:${pct>=85?'var(--lime)':pct>=60?'var(--sun)':'var(--orange)'}"></span></span><span class="big">${pct}%</span></div>
+   <h3>RIDE CHARACTER</h3>
+   <div class="stats" role="list" aria-label="Board stats">${bars}</div>
+   <div class="specs"><div><b>SIZE</b>${fmtLen(b.L)} × ${fmtIn(b.W,4)} × ${fmtIn(b.T)}</div><div><b>VOLUME</b>${r.vol.toFixed(1)} L · ${Math.round(r.weight)} lb</div><div><b>RAILS</b>${esc(RAILS[b.rails].name)}</div><div><b>BLANK COST</b>$${cost}</div></div>
+   <div class="row"><button class="btn" id="b-glass" data-act="glass" ${can?'':'disabled'}>GLASS IT & TEST RIDE · $${cost}</button>
+   <button class="btn ghost" id="b-back" data-act="toshop">BACK</button></div>
+   ${can?'':`<p class="bad small">Not enough cash for this blank. Wood blanks are cheaper, and shorter boards use less.</p>`}`;
+}
+function legendHTML(){
+  return `<div class="legend">
+   <kbd>SPACE · A BTN · →</kbd><span>Paddle (tap fast as the swell arrives)</span>
+   <kbd>↑ / W</kbd><span>Pop up, then climb the face</span>
+   <kbd>↓ / S</kbd><span>Drop down the face (gains speed)</span>
+   <kbd>→ / D</kbd><span>Pump for speed</span>
+   <kbd>← / A KEY</kbd><span>Stall back toward the curl; hold on the shoulder to cut back</span>
+   <kbd>HOLD SPACE / A</kbd><span>Mid-face: walk to the nose. At the lip with speed: air</span>
+  </div>`;
+}
+const MOVES=[
+  ['Bottom turn','Drop to the bottom, then press ↑.'],
+  ['Top turn / Off the lip','Climb to the top, then press ↓. Near the curl it counts as off the lip.'],
+  ['Tail slide','Hold ← while you turn off the top. Needs a loose board.'],
+  ['Floater','Hold ↑ along the lip near the curl, then come back down before you stall.'],
+  ['Cutback / Roundhouse','On the shoulder, hold ←. Go in fast for a roundhouse.'],
+  ['Drop-knee turn','Boards 8 ft+: hold A through a bottom turn.'],
+  ['Noseride, hang five, hang ten','Hold A while trimming mid-face. Release before the NOSE meter fills.'],
+  ['Spinner','Double-tap A mid-face to spin 360° on your feet. Stable boards land it.'],
+  ['Barrel + grab rail','Hollow waves: stall into the curl mid-face. Hold A to grab your rail and go deeper.'],
+  ['Air','Hit the lip fast going up and press A.'],
+  ['Claim','Tap A while you kick out.'],
+  ['Combo','Chain moves within 2.5 s to raise the multiplier.'],
+];
+function panelSurf(){
+  const pk=(k,cls,lbl,aria)=>`<button class="pk ${cls}" data-key="${k}" aria-label="${aria}">${lbl}</button>`;
+  return `<div class="surfbar">
+    <div class="dpad">${pk('up','u','▲','Climb')}${pk('left','l','◀','Stall or cutback')}${pk('right','r','▶','Pump or paddle')}${pk('down','d','▼','Drop')}</div>
+    ${legendHTML()}
+    ${pk('a','a','A','Paddle, noseride or air')}
+  </div>
+  <details style="margin-top:12px"><summary>MOVE LIST</summary><div class="legend">${MOVES.map(([n,h])=>`<kbd>${esc(n.toUpperCase())}</kbd><span>${esc(h)}</span>`).join('')}</div></details>
+  <div class="row" style="margin-top:12px"><button class="btn ghost" id="b-end" data-act="endsurf">END SESSION</button><span class="muted small">Three waves. Judges score each one out of 10.</span></div>`;
+}
+function panelResults(){
+  const R=S.last; if(!R) return '';
+  const a=ARCH_BY[R.arch];
+  const crit=R.parts.map(p=>`<li class="${p.s>=0.9?'good':p.s<0.6?'bad':''}">${esc(p.lbl)}: ${Math.round(p.s*100)}%</li>`).join('');
+  return `<div class="stack">
+   ${R.legend?`<p class="good">That makes four stars or better for every kind of surfer in town. You're a legend of the coast.</p>`:''}
+   <div class="row"><h2>${esc(R.name)}'s review · ${R.stars.toFixed(1)}★</h2></div>
+   <div class="card review">
+     ${R.good.map(g=>`<p class="good">“${esc(g)}”</p>`).join('')}
+     ${R.bad.map(g=>`<p class="bad">“${esc(g)}”</p>`).join('')}
+     <p>“${esc(R.surfLine)}”</p>
+   </div>
+   <div class="scorebox">
+     <div class="card"><b class="lbl">BOARD FIT</b><span class="big">${Math.round(R.fit*100)}%</span></div>
+     <div class="card"><b class="lbl">WAVES</b><span class="big">${R.scores.map(s=>s.judge.toFixed(1)).join(' · ')}</span></div>
+     <div class="card"><b class="lbl">PAID</b><span class="big">$${R.pay}</span></div>
+     <div class="card"><b class="lbl">TIP</b><span class="big">$${R.tip}</span></div>
+   </div>
+   <details><summary>WHAT ${esc(R.name.toUpperCase())} WAS JUDGING</summary><ul class="review">${crit}</ul></details>
+   <div class="row"><button class="btn" id="b-shop" data-act="toshop">NEXT CUSTOMER</button><button class="btn blue" id="b-up2" data-act="upgrades">SUPPLY ORDER</button></div>
+  </div>`;
+}
+function panelUpgrades(){
+  const items=[];
+  for(const [k,m] of Object.entries(MATERIALS)) if(m.unlock) items.push({cat:'mat',k,name:m.name,kind:'Material',cost:m.unlock,tip:m.tip});
+  for(const [k,m] of Object.entries(TEMPLATES)) if(m.unlock) items.push({cat:'tpl',k,name:m.name,kind:'Template',cost:m.unlock,tip:m.tip});
+  for(const [k,m] of Object.entries(FINS)) if(m.unlock) items.push({cat:'fin',k,name:m.name+' fins',kind:'Fins',cost:m.unlock,tip:m.tip});
+  items.sort((x,y)=>x.cost-y.cost);
+  const cards=items.map(it=>{ const own=S.unlocked[it.cat].includes(it.k);
+    return `<div class="card up"><div class="row"><h3>${esc(it.name.toUpperCase())}</h3><span class="tag">${it.kind.toUpperCase()}</span></div><p class="small">${esc(it.tip)}</p>
+     ${own?'<span class="owned">IN THE SHOP</span>':`<div class="row"><span class="price">$${it.cost}</span><button class="btn" id="u-${it.cat}-${it.k.replace('+','p')}" data-act="buy" data-cat="${it.cat}" data-k="${it.k}" ${S.money>=it.cost?'':'disabled'}>BUY</button></div>`}</div>`; }).join('');
+  return `<div class="stack"><div class="row"><h2>Supply order</h2><span class="muted">New materials, templates and fins bring new customers through the door.</span></div>
+   <div class="up-grid">${cards}</div>
+   <div class="row"><button class="btn" id="b-shop2" data-act="toshop">BACK TO THE SHOP</button></div></div>`;
+}
+function panelNotebook(){
+  const tabs=[['materials','WOOD → FOAM'],['shapes','LONG → SHORT'],['anatomy','ANATOMY'],['timeline','TIMELINE']];
+  const tabH=tabs.map(([k,l])=>`<button class="opt" id="nt-${k}" data-act="nbtab" data-k="${k}" aria-pressed="${nb.tab===k}">${l}</button>`).join('');
+  let body='';
+  if(nb.tab==='timeline'){ body=`<div class="tl">${NOTEBOOK.timeline.map(([y,e])=>`<b>${esc(y)}</b><span>${esc(e)}</span>`).join('')}</div>`; }
+  else {
+    body=`<div class="entries">${NOTEBOOK[nb.tab].map(e=>{
+      const owned = e.tpl ? S.unlocked.tpl.includes(e.tpl) : e.key ? S.unlocked.mat.includes(e.key) : true;
+      const head = e.tpl ? `<button class="h" id="nb-${e.id}" data-act="nbsel" data-k="${e.tpl}"><h3>${esc(e.title.toUpperCase())}</h3></button>` : `<h3>${esc(e.title.toUpperCase())}</h3>`;
+      return `<article class="card entry${e.tpl&&nb.sel===e.tpl?' sel':''}">${head}<span class="era">${esc(e.era.toUpperCase())}${owned?'':' · NOT IN YOUR SHOP YET'}</span>${e.body.map(p=>`<p class="small">${esc(p)}</p>`).join('')}<p class="game">In the shop: ${esc(e.game)}</p></article>`;
+    }).join('')}</div>`;
+  }
+  const back = prevScreen==='shape' ? 'BACK TO SHAPING' : 'BACK';
+  return `<div class="stack"><div class="row"><h2>Shaper's notebook</h2>${nb.tab==='shapes'?'<span class="muted small">Tap a heading to light up that board in the lineup.</span>':''}</div>
+   <div class="tabs" role="group" aria-label="Notebook sections">${tabH}</div>${body}
+   <div class="row"><button class="btn" id="b-nbback" data-act="nbback">${back}</button></div></div>`;
+}
+let prevScreen='title';
+
+/* ============================== EVENTS ============================== */
+function initBoard(){
+  const u=S.unlocked; const tpl=u.tpl.includes('log')?'log':u.tpl[0];
+  applyTemplate(tpl, u.mat.includes('balsa')?'balsa':u.mat[0]);
+}
+function applyTemplate(tpl,mat){
+  const d=TEMPLATES[tpl].def; const fins=S.unlocked.fin.includes(d.fins)?d.fins:'single';
+  S.board={mat:mat||S.board.mat,tpl,L:d.L,W:d.W,T:d.T,float:0,rocker:d.rocker,tail:d.tail,fins,rails:d.rails};
+}
+function setFloat(fv){ const b=S.board, d=TEMPLATES[b.tpl].def; b.float=fv; b.W=clamp(d.W+fv*0.5,16.5,24); b.T=clamp(d.T+fv*0.25,0.75,4.5); }
+panel.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]'); if(!el || el.disabled) return;
+  ac(); const act=el.dataset.act; sfx.click();
+  handleAct(act,el);
+});
+chips.addEventListener('click',e=>{ const el=e.target.closest('[data-act]'); if(!el) return; ac(); handleAct(el.dataset.act,el); });
+function handleAct(act,el){
+  switch(act){
+    case 'start': confirmNew=false; hasSave=true; setScreen('shop'); break;
+    case 'newgame': if(!confirmNew){ confirmNew=true; renderPanel(); } else { S=freshSave(); S.muted=muted; hasSave=false; confirmNew=false; save(); hasSave=true; setScreen('shop'); } break;
+    case 'notebook': if(screen==='surf') return; if(screen!=='notebook'){ prevScreen=screen==='surf'?'shop':screen; } setScreen('notebook'); break;
+    case 'nbback': setScreen(prevScreen==='notebook'?'shop':prevScreen); break;
+    case 'nbtab': nb.tab=el.dataset.k; renderPanel(); break;
+    case 'nbsel': nb.sel=el.dataset.k; renderPanel(); beep(520,0.05); break;
+    case 'mute': muted=!muted; S.muted=muted; save(); renderChips(); break;
+    case 'toshape': if(!S.board) initBoard(); setScreen('shape'); dust(); break;
+    case 'nextcust': newCustomer(); renderPanel(); break;
+    case 'upgrades': setScreen('upgrades'); break;
+    case 'toshop': setScreen('shop'); break;
+    case 'set': {
+      const f=el.dataset.f, k=el.dataset.k;
+      if(f==='tpl') applyTemplate(k,S.board.mat); else S.board[f]=k;
+      save(); dust(); renderPanel(); break; }
+    case 'glass': { const cost=blankCost(S.board); if(S.money<cost) return; S.money-=cost; save(); renderChips(); startSession(); break; }
+    case 'buy': { const cat=el.dataset.cat,k=el.dataset.k; const dict={mat:MATERIALS,tpl:TEMPLATES,fin:FINS}[cat]; const cost=dict[k].unlock; if(S.money<cost) return;
+      S.money-=cost; S.unlocked[cat].push(k); save(); sfx.cash(); renderPanel(); renderChips(); break; }
+    case 'endsurf': if(surf){ if(surf.phase!=='between'){ surf.scores.push({pts:Math.round(surf.points),judge:judge(surf.points),note:''}); } while(surf.scores.length<3) surf.scores.push({pts:0,judge:0,note:''}); endSession(); } break;
+  }
+}
+panel.addEventListener('input',e=>{
+  const el=e.target; if(!el.dataset || !el.dataset.r || !S.board) return;
+  const f=el.dataset.r; const v=parseFloat(el.value); const b=S.board;
+  if(f==='float') setFloat(Math.round(v)); else b[f]= f==='rocker'?Math.round(v):v;
+  const o={L:['o-L',fmtLen(b.L)],float:['o-F',FLOAT_LBL[(b.float||0)+2]],rocker:['o-R',ROCKER_LBL[b.rocker]]}[f];
+  const out=document.getElementById(o[0]); if(out) out.textContent=o[1];
+  const ro=document.getElementById('readout'); if(ro) ro.innerHTML=readoutHTML();
+  if(Math.random()<0.4) dust(6);
+});
+panel.addEventListener('change',()=>save());
+// touch / mouse pad
+panel.addEventListener('pointerdown',e=>{ const el=e.target.closest('[data-key]'); if(!el) return; e.preventDefault(); ac(); try{el.setPointerCapture(e.pointerId);}catch(_){} press(el.dataset.key); el.classList.add('on'); });
+const up=e=>{ const el=e.target.closest && e.target.closest('[data-key]'); if(!el) return; release(el.dataset.key); el.classList.remove('on'); };
+panel.addEventListener('pointerup',up); panel.addEventListener('pointercancel',up); panel.addEventListener('lostpointercapture',up);
+panel.addEventListener('contextmenu',e=>{ if(e.target.closest('[data-key]')) e.preventDefault(); });
+const KEYMAP={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'a',KeyZ:'a',KeyX:'a',KeyJ:'a',KeyK:'a'};
+addEventListener('keydown',e=>{
+  if(e.target && (e.target.tagName==='INPUT') && screen!=='surf') return;
+  if(screen==='title' && (e.code==='Enter') && !(e.target && e.target.tagName==='BUTTON')){ ac(); handleAct('start'); return; }
+  const k=KEYMAP[e.code]; if(!k) return;
+  if(screen==='surf'){ e.preventDefault(); if(!e.repeat) ac(); press(k); }
+});
+addEventListener('keyup',e=>{ const k=KEYMAP[e.code]; if(k) release(k); });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=0; });
+cv.addEventListener('click',()=>{ ac(); if(screen==='title') handleAct('start'); });
+
+/* ============================== LOOP ============================== */
+function frame(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now; tick+=dt; shake=Math.max(0,shake-dt);
+  resetT();
+  try{
+    switch(screen){
+      case 'title': drawTitle(tick); break;
+      case 'shop': drawShop(tick); break;
+      case 'shape': drawShape(tick); break;
+      case 'surf': if(surf){ updateSurf(dt); if(screen==='surf') drawSurf(tick); else resetT(); } break;
+      case 'results': drawResults(tick-resultsT0()); break;
+      case 'upgrades': drawUpgrades(tick); break;
+      case 'notebook': drawLineup(tick); break;
+    }
+  }catch(err){ console.error(err); }
+  for(const k in pressed) pressed[k]=false;
+  requestAnimationFrame(frame);
+}
+let _rt=0, _rs=null; function resultsT0(){ if(_rs!==S.last){ _rs=S.last; _rt=tick; } return _rt; }
+if(document.fonts && document.fonts.load){ document.fonts.load('8px "Press Start 2P"').catch(()=>{}); }
+renderPanel(); renderChips();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
