@@ -572,7 +572,13 @@ function drawProfile(b,cx,cy,sc){
 
 /* ============================== PEOPLE ============================== */
 function randLook(){ return {skin:pick(SKIN),hair:pick(HAIR),shirt:pick(SHIRT),shorts:pick(SHORTS)}; }
+// people are drawn 1.5x: on the 2x canvas every sprite pixel becomes exactly 3 screen pixels, so they stay crisp
+const PSC=1.5;
 function drawPerson(x,y,lk,pose='stand',f=0,flip=false){
+  ctx.save(); ctx.translate(Math.round(x),Math.round(y)); ctx.scale(PSC,PSC);
+  drawPersonRaw(0,0,lk,pose,f,flip); ctx.restore();
+}
+function drawPersonRaw(x,y,lk,pose='stand',f=0,flip=false){
   x=Math.round(x); y=Math.round(y); const s=flip?-1:1;
   const head=(hx,hy,face=1)=>{ rect(hx,hy,5,5,lk.skin); rect(hx,hy-1,5,2,lk.hair); rect(face>0?hx:hx+4,hy,1,3,lk.hair); rect(face>0?hx+3:hx+1,hy+2,1,1,P.k); };
   switch(pose){
@@ -582,6 +588,8 @@ function drawPerson(x,y,lk,pose='stand',f=0,flip=false){
     rect(x-3,y-10,7,4,lk.shorts); rect(x-3,y-16,7,6,lk.shirt);
     rect(x-4,y-15,1,5,lk.skin); rect(x+4,y-15,1,5,lk.skin);
     head(x-2,y-21,flip?-1:1); break; }
+  case 'wave':
+    drawPersonRaw(x,y,lk,'stand',0,flip); rect(flip?x-5:x+5,y-22,1,7,lk.skin); rect(flip?x-6:x+5,y-23,2,2,lk.skin); break;
   case 'claim':
     rect(x-4,y-5,2,5,lk.skin); rect(x+3,y-5,2,5,lk.skin);
     rect(x-3,y-9,7,4,lk.shorts); rect(x-3,y-15,7,6,lk.shirt);
@@ -613,7 +621,7 @@ function drawPerson(x,y,lk,pose='stand',f=0,flip=false){
       rect(x-3,y-9,7,4,lk.shorts); rect(x-3,y-15,7,6,q?lk.shirt:lk.shirt);
       rect(x-8,y-14,5,1,lk.skin); rect(x+4,y-14,5,1,lk.skin);
       rect(x-2,y-20,5,5,q?lk.hair:lk.skin); rect(x-2,y-21,5,2,lk.hair);
-    } else drawPerson(x,y,lk,'surf',0,q===3);
+    } else drawPersonRaw(x,y,lk,'surf',0,q===3);
     break; }
   case 'prone': case 'paddle': {
     // lying on the board, head toward the nose (right)
@@ -674,100 +682,226 @@ function newCustomer(){
 function repScore(){ const r=S.ratings.slice(-8); return r.length? r.reduce((a,b)=>a+b,0)/r.length : 0; }
 
 /* ============================== SCREEN: TITLE ============================== */
+// title scene: looking past the shack, down the beach and out to a sunset lineup
+const TITLE_RACK=[{tpl:'log',mat:'balsa',L:114,W:23,tail:'square'},{tpl:'gun',mat:'pu',L:102,W:20,tail:'pin'},
+  {tpl:'egg',mat:'wood',L:84,W:21.5,tail:'round'},{tpl:'fish',mat:'eps',L:66,W:21,tail:'swallow'}];
+function dith(x,y,w,h,a,b){ for(let yy=y;yy<y+h;yy++) for(let xx=x+((yy+x)&1);xx<x+w;xx+=2) rect(xx,yy,1,1,b); }
 function drawTitle(t){
-  const bands=[P.plum,P.red,P.orange,P.sun];
-  for(let y=0;y<110;y++){ const bi=Math.min(3,Math.floor(y/27.5)); const d=(y%27.5)<2&&bi>0; rect(0,y,W,1,bands[bi]); if(d) for(let x=(y&1);x<W;x+=2) rect(x,y,1,1,bands[bi-1]); }
-  // striped sun
-  for(let y=-30;y<=0;y++){ const w=Math.sqrt(900-y*y); const yy=108+y; if(yy>86 && (yy%4)<2) continue; rect(232-w,yy,w*2,1,yy<92?P.sun:P.white); }
-  // headland
-  for(let x=0;x<W;x++){ const h=Math.max(0,12+8*Math.sin(x*0.02+1)+4*Math.sin(x*0.07))*(x<130?1:0); if(h>0) rect(x,110-h,1,h,P.plum); }
-  // sea
-  rect(0,110,W,70,P.navy);
-  for(let y=112;y<180;y+=5){ const off=Math.floor(t*12*(y/60))%40; for(let x=-off;x<W;x+=40) rect(x+(y*7)%40,y,10+(y%3)*4,1,y<130?P.orange:P.blue); }
-  // little wave + surfer
-  const wx=((t*28)%420)-60;
-  for(let i=0;i<70;i++){ const h=Math.round(16*Math.sin((i/70)*Math.PI)); rect(wx+i,148-h,1,h,i<10?P.white:P.sky); rect(wx+i,148-h,1,1,P.white);}
-  drawBoard({mat:'pu',tpl:'short',L:72,W:19,tail:'squash'},wx+40,140,0.25,'h');
-  drawPerson(wx+40,139,OWNER,'surf');
-  // shack
-  rect(20,128,64,40,P.red); rect(16,122,72,8,P.orange); rect(24,122,6,46,P.plum);
-  rect(46,140,14,28,P.k); rect(64,134,14,10,P.sun);
-  text('SALT SHACK',W/2,30,P.sun,16,'center',P.red);
-  text('SHAPES',W/2,52,P.white,16,'center',P.plum);
-  text('A SURF SHOP SHAPING GAME',W/2,76,P.k,8,'center',null);
-  if(Math.floor(t*2)%2===0) text('PRESS START',W/2,160,P.white,8,'center');
+  const HZ=84, SAND=130, sunX=112;
+  // sky: sunset bands joined by dithered seams
+  const bands=[[0,P.plum],[20,P.red],[42,P.orange],[76,P.sun]];
+  bands.forEach(([y0,c],i)=>{ const y1=i<3?bands[i+1][0]:HZ; rect(0,y0,W,y1-y0,c); if(i>0) dith(0,y0,W,2,c,bands[i-1][1]); });
+  // thin clouds drifting
+  [[30,P.red,60,0.6],[16,P.plum,90,0.35],[40,P.red,40,0.9]].forEach(([y,c,w,sp],i)=>{ const x=((i*120-t*sp*6)%(W+w)+W+w)%(W+w)-w; rect(x,y,w,1,c); rect(x+8,y+1,w-20,1,c); });
+  // striped sun sitting on the horizon
+  for(let y=-28;y<=0;y++){ const yy=HZ+y; if(yy>HZ-14 && (yy%3)===0) continue; const w=Math.sqrt(784-y*y); rect(sunX-w,yy,w*2,1,yy<HZ-20?P.white:P.sun); }
+  // birds
+  for(let k=0;k<3;k++){ const bx=((t*(10+k*3)+k*70)%(W+40))-20, by=24+k*7+Math.round(Math.sin(t*2+k)*2), up=Math.floor(t*4+k)%2;
+    rect(bx-2,by-up,2,1,P.plum); rect(bx+1,by-up,2,1,P.plum); rect(bx,by+1-up*0,1,1,P.plum); }
+  // headland on the left
+  for(let x=0;x<104;x++){ const h=Math.max(0,Math.round(14+7*Math.sin(x*0.05+0.4)+3*Math.sin(x*0.17)-x*0.12)); if(h>0) rect(x,HZ-h,1,h,P.plum); }
+  // ocean
+  rect(0,HZ,W,SAND-HZ,P.navy); rect(0,HZ,W,1,P.sun);
+  for(let y=HZ+2;y<SAND;y+=3){ const off=Math.floor(t*(4+(y-HZ)*0.3))%48; for(let x=-off+(y*13)%48;x<W;x+=48) rect(x,y,6+((y>>1)%3)*3,1,P.blue); }
+  // sun glitter on the water
+  for(let y=HZ+1;y<SAND-6;y+=2){ const spread=4+(y-HZ)*0.9, n=3; for(let k=0;k<n;k++){ const g=hash(k,y,Math.floor(t*6))%100/100; rect(sunX-spread+g*spread*2,y,2+(k&1),1,y<HZ+16?P.sun:P.orange); } }
+  // lines of swell peeling right, with a tiny surfer on the inside wave
+  [[HZ+10,0.6,40],[HZ+22,0.8,0],[HZ+34,1,90]].forEach(([y,sc,ph],k)=>{
+    const len=W+80, prog=((t*14*sc+ph)%len)-40;
+    rect(prog-90*sc,y,90*sc,1,P.blue); rect(prog-60*sc,y-1,60*sc,1,P.sky);
+    for(let x=Math.max(0,prog-50*sc);x<prog;x++){ const fx=Math.round(x); if(hash(fx,y,Math.floor(t*10))%3) rect(fx,y-1-(hash(fx,y,1)%2),1,2,P.white); }
+    if(k===2){ const sx=Math.round(prog+4); rect(sx-3,y-2,7,1,P.white); rect(sx,y-6,1,4,OWNER.shirt); rect(sx-1,y-5,3,1,OWNER.skin); rect(sx,y-7,1,1,OWNER.skin); }   // a far-off surfer, a few pixels tall
+  });
+  // shorebreak washing up the sand
+  const wash=x=>SAND-1+Math.round(2.5+2.5*Math.sin(t*0.9+x*0.025));
+  rect(0,SAND-2,W,5,P.orange);
+  for(let x=0;x<W;x++){ const wy=wash(x); rect(x,SAND-4,1,wy-SAND+4,P.sky); rect(x,wy,1,1,P.white); if(hash(x,0,Math.floor(t*8))%4===0) rect(x,wy-1,1,1,P.white); }
+  // beach
+  rect(0,SAND+5,W,H-SAND-5,P.sun); dith(0,SAND+5,W,2,P.sun,P.orange);
+  for(let k=0;k<70;k++) rect((k*53)%W,SAND+8+(k*29)%40,1,1,P.orange);
+  for(let k=0;k<7;k++){ rect(70+k*12,176-k*5,2,1,P.orange); rect(76+k*12,174-k*5,2,1,P.orange); }   // footprints to the water
+  // palm tree, swaying
+  const sway=Math.sin(t*1.3)*1.5;
+  for(let k=0;k<44;k++){ const y=172-k*1.6, x=22+Math.pow(k/44,1.6)*16+sway*(k/44); rect(x,y,4,2,k%5===0?P.plum:P.orange); }
+  const tx=38+sway, ty=101;
+  [[-1,0.15],[-1,0.55],[-0.6,1],[1,0.2],[1,0.6],[0.6,1],[0.15,-0.25]].forEach(([dir,dr])=>{ for(let k=0;k<24;k++){ const x=tx+dir*k*1.15, y=ty+Math.pow(k/24,1.7)*16*dr-(dr<0?k*0.4:0)+Math.sin(t*2+k*0.25+dir)*0.7*(k/24); const w=k<16?3:2; rect(x,y,w,1,k<14?P.green:P.teal); if(k%3===1) rect(x,y+1,1,2,P.teal); } });
+  rect(tx-1,ty,4,3,P.plum);
+  // ---- the shack ----
+  const sx=186, sw=104, wallTop=106, deck=148;
+  // shadow on the sand
+  dith(sx-10,deck+8,sw+28,10,P.sun,P.orange);
+  // stilts and steps
+  for(const px of [sx-4,sx+30,sx+64,sx+sw]) rect(px,deck+4,3,14,P.plum);
+  for(let k=0;k<3;k++) rect(sx+40-k*4,deck+5+k*4,22,2,P.red);
+  // walls: vertical planks lit from the sunset side
+  for(let x=sx;x<sx+sw;x++){ const plank=Math.floor((x-sx)/6); rect(x,wallTop,1,deck-wallTop,(x-sx)%6===0?P.plum:plank%2?P.red:P.orange); }
+  dith(sx+sw-18,wallTop,18,deck-wallTop,P.red,P.plum);
+  // window with a warm glow and a board silhouette inside
+  rect(sx+62,wallTop+10,30,20,P.k); rect(sx+64,wallTop+12,26,16,P.sun); dith(sx+64,wallTop+20,26,8,P.sun,P.orange);
+  rect(sx+76,wallTop+12,2,16,P.k); rect(sx+64,wallTop+19,26,1,P.k); rect(sx+68,wallTop+13,3,14,P.red);
+  // door, propped open
+  rect(sx+40,wallTop+12,18,deck-wallTop-12,P.k); rect(sx+42,wallTop+14,9,deck-wallTop-14,P.orange); rect(sx+51,wallTop+14,5,deck-wallTop-14,P.plum);
+  // OPEN sign on the door
+  if(Math.sin(t*3)>-0.8){ rect(sx+43,wallTop+18,12,6,P.k); rect(sx+44,wallTop+19,10,4,P.lime); }
+  // corrugated roof with an overhang
+  for(let y=0;y<14;y++){ const inset=Math.round((13-y)*0.9); for(let x=sx-12+inset;x<sx+sw+12-inset;x++) rect(x,wallTop-14+y,1,1,((x>>1)&1)?P.teal:P.green); }
+  rect(sx-12,wallTop,sw+24,2,P.k);
+  // surfboard-shaped sign on the roof
+  const sign={mat:'pu',tpl:'log',L:110,W:22,tail:'square'}; drawBoard(sign,sx+sw/2,wallTop-22,0.6,'h');
+  text('BOARDS',sx+sw/2,wallTop-26,P.red,8,'center',null);
+  // string lights along the eave
+  for(let k=0;k<14;k++){ const lx=sx-8+k*9, ly=wallTop+3+Math.round(Math.sin(k*0.9)*1.5); rect(lx,ly,2,2,(Math.floor(t*3)+k)%3===0?P.white:[P.sun,P.lime,P.aqua,P.orange][k%4]); }
+  // boards leaning on the wall
+  TITLE_RACK.forEach((b,k)=>{ const c=boardCanvas(b,0.36,'v'); ctx.drawImage(c,Math.round(sx+6+k*8-c.width/2),Math.round(deck-c.height)); });
+  // porch deck and rail
+  rect(sx-8,deck,sw+16,4,P.red); for(let x=sx-8;x<sx+sw+8;x+=5) rect(x,deck,1,4,P.plum); rect(sx-8,deck+4,sw+16,1,P.plum);
+  rect(sx+62,deck-10,sw-54,1,P.plum); for(let x=sx+62;x<sx+sw+8;x+=8) rect(x,deck-10,1,10,P.plum);
+  // the owner on the porch, waving now and then
+  const wave=Math.floor(t*1.5)%4===0;
+  drawPerson(sx+sw-2,deck,OWNER,wave?'wave':'stand',0,true);
+  // ---- title ----
+  text('SALT SHACK',W/2,12,P.sun,16,'center',P.red);
+  text('SHAPES',W/2,32,P.white,16,'center',P.plum);
+  text('A SURF SHOP SHAPING GAME',W/2,54,P.white,8,'center',P.red);
+  if(Math.floor(t*2)%2===0) text('PRESS START',100,158,P.white,8,'center',P.red);
 }
 
 /* ============================== SCREEN: SHOP ============================== */
+// a little sunset beach, used for the shop window
+function drawWindowView(x,y,w,h,t){
+  ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+  const hz=y+Math.round(h*0.62), sand=y+h-7, cx=x+w*0.27;
+  const bands=[P.plum,P.red,P.orange,P.sun]; const bh=(hz-y)/4;
+  bands.forEach((c,i)=>{ rect(x,y+i*bh,w,bh+1,c); if(i) dith(x,Math.round(y+i*bh),w,1,c,bands[i-1]); });
+  for(let r=-13;r<=0;r++){ const yy=hz+r; if(yy>hz-6 && yy%3===0) continue; const ww=Math.sqrt(169-r*r); rect(cx-ww,yy,ww*2,1,yy<hz-9?P.white:P.sun); }
+  rect(x,hz,w,sand-hz,P.navy); rect(x,hz,w,1,P.sun);
+  for(let yy=hz+2;yy<sand;yy+=2){ const g=hash(yy,0,Math.floor(t*5))%9; rect(cx-3-g*0.6+(yy-hz)*0.2,yy,3,1,P.orange); }
+  const sw=((t*12)%(w+40))-20; rect(x+sw-24,hz+6,24,1,P.sky); for(let k=0;k<10;k++) if(hash(k,Math.floor(t*8),2)%3) rect(x+sw-10+k,hz+5,1,1,P.white);
+  rect(x,sand-1,w,1,P.white); rect(x,sand,w,7,P.sun); dith(x,sand,w,1,P.sun,P.orange);
+  ctx.restore();
+}
 function drawShop(t){
-  rect(0,0,W,130,P.navy);
-  for(let x=0;x<W;x+=14) rect(x,0,1,130,P.dusk);
-  // window
-  rect(114,26,94,58,P.k); rect(117,29,88,28,P.sky); rect(117,57,88,24,P.blue);
-  rect(180,34,10,10,P.white);
-  for(let i=0;i<88;i++){ const h=2+Math.round(2*Math.sin(i*0.25+t*3)); rect(117+i,57-h,1,h,P.aqua); }
-  rect(160,29,2,52,P.k); rect(117,55,88,2,P.k);
+  const FLOOR=118;
+  // ceiling beam
+  rect(0,0,W,6,P.plum); for(let x=4;x<W;x+=40) rect(x,6,6,3,P.plum);
+  // back wall: tongue-and-groove planks, darker wainscot below a rail
+  for(let x=0;x<W;x++) rect(x,6,1,90,x%7===0?P.red:P.orange);
+  dith(0,6,W,10,P.orange,P.red);
+  rect(0,96,W,FLOOR-96,P.red); for(let x=3;x<W;x+=11) rect(x,98,1,FLOOR-98,P.plum); rect(0,95,W,2,P.plum);
+  // window onto the beach
+  const wx=120,wy=26,ww=84,wh=56;
+  rect(wx-4,wy-4,ww+8,wh+8,P.plum); drawWindowView(wx,wy,ww,wh,t);
+  rect(wx+ww/2-1,wy,2,wh,P.plum); rect(wx,wy+12,ww,2,P.plum);
+  rect(wx-6,wy+wh+3,ww+12,3,P.red); rect(wx-6,wy+wh+6,ww+12,1,P.plum);       // sill
+  rect(wx+4,wy+wh-2,6,5,P.red); rect(wx+5,wy+wh-6,1,4,P.green); rect(wx+7,wy+wh-8,1,6,P.green); rect(wx+8,wy+wh-5,2,1,P.green);  // potted plant
+  rect(wx+ww-14,wy+wh,10,3,P.white); rect(wx+ww-13,wy+wh-2,8,2,P.sky);                                // bars of wax
+  // light from the window falling across the floor
+  for(let k=0;k<30;k++){ const fy=FLOOR+2+k*2; const sx=wx+8+k*2.2, sw2=ww*0.8; dith(Math.round(sx),fy,Math.round(sw2),1,P.red,P.orange); }
+  // dust motes in the light
+  for(let k=0;k<8;k++){ const mx=wx+10+((k*37+t*4)%(ww-16)), my=wy+wh+10+((k*23+t*3*(k%3+1))%40); if((k+Math.floor(t*2))%3) rect(mx,my,1,1,P.sun); }
   // neon sign
-  const fl = Math.sin(t*9)>-0.95;
-  text('SALT SHACK',160,8,fl?P.aqua:P.teal,8,'center',P.k);
-  // rack
-  rect(8,30,100,3,P.orange); rect(8,120,100,4,P.orange);
+  const fl=Math.sin(t*9)>-0.95&&Math.sin(t*23)>-0.98;
+  rect(wx+6,9,ww-12,13,P.k); text('SALT SHACK',wx+ww/2,12,fl?P.aqua:P.teal,8,'center',fl?P.teal:null);
+  // board rack on the left wall: the boards you've shaped
+  const rk0=22, rk1=110;
+  rect(rk0,64,rk1-rk0,3,P.plum); for(let x=rk0+4;x<rk1;x+=12) rect(x,62,2,7,P.plum);
+  rect(rk0-2,FLOOR-3,rk1-rk0+4,4,P.plum);
   const rack=S.rack.slice(0,7);
-  rack.forEach((b,i)=>{ const c=boardCanvas(b,0.42,'v'); ctx.drawImage(c,Math.round(18+i*13-c.width/2),Math.round(120-c.height)); });
-  if(!rack.length) text('EMPTY RACK',58,70,P.slate,8,'center',null);
-  // shaping bay door
-  rect(214,40,40,80,P.k); rect(216,42,36,78,P.dusk); text('BAY',234,50,P.sun,8,'center',null);
-  rect(222,70,24,2,P.aqua);
-  // floor
-  rect(0,124,W,56,P.orange);
-  for(let y=128;y<180;y+=8) rect(0,y,W,1,P.red);
-  for(let y=128,r=0;y<180;y+=8,r++) for(let x=(r%2)*30;x<W;x+=60) rect(x,y,1,8,P.red);
-  // counter + owner
-  drawPerson(280,140,OWNER,'stand',0,true);
-  rect(254,128,66,40,P.red); rect(250,124,70,6,P.sun); rect(258,134,58,2,P.plum);
-  rect(296,114,14,10,P.dusk); rect(298,116,10,4,P.lime);
-  // customer
-  if(S.customer){
-    const c=S.customer; const dt=t-shopT0; const x=Math.max(186, 340 - dt*70); const walking = x>186;
-    if(screen==='shop') {
-      drawPerson(x,168,c.look,walking?'walk':'stand',t,true);
-      if(!walking){ const bob=Math.floor(t*3)%2; rect(178,128-bob,16,14,P.white); rect(186,142-bob,3,3,P.white); text('!',182,131-bob,P.k,8,'left',null); }
-    }
+  if(rack.length){ rack.forEach((b,i)=>{ const sc=Math.min(0.5,96/b.L); const c=boardCanvas(b,sc,'v'); ctx.drawImage(c,Math.round(rk0+8+i*13-c.width/2),Math.round(FLOOR-3-c.height)); }); }
+  else { for(let i=0;i<3;i++){ const c=boardCanvas({mat:'pu',tpl:['log','egg','fish'][i],L:[110,84,66][i],W:21,tail:'round'},0.5,'v',true); ctx.drawImage(c,Math.round(rk0+20+i*26-c.width/2),Math.round(FLOOR-3-c.height)); } text('YOUR BOARDS',(rk0+rk1)/2,40,P.red,8,'center',null); }
+  // a vintage longboard mounted above the rack
+  drawBoard({mat:'wood',tpl:'olo',L:150,W:18,tail:'round'},(rk0+rk1)/2,20,0.5,'h');
+  rect(rk0+18,23,2,3,P.plum); rect(rk1-20,23,2,3,P.plum);
+  // door to the shaping bay, foam dust sneaking out from under it
+  const dx=214, dy=44;
+  rect(dx-3,dy-3,34,FLOOR-dy+3,P.plum); rect(dx,dy,28,FLOOR-dy,P.dusk); rect(dx+2,dy+2,24,FLOOR-dy-2,P.navy);
+  rect(dx+9,dy+10,10,10,P.k); rect(dx+10,dy+11,8,8,Math.sin(t*2)>0?P.aqua:P.sky); rect(dx+22,dy+40,3,2,P.sun);
+  rect(dx-2,dy-12,32,8,P.k); text('BAY',dx+14,dy-11,P.sun,8,'center',null);
+  for(let k=0;k<5;k++){ const px=dx+2+((k*7+t*6)%24), py=FLOOR-1-((t*3+k)%4); rect(px,py,1,1,P.white); }
+  // pendant lamps
+  for(const lx of [70,272]){ rect(lx,0,1,16,P.k); rect(lx-4,16,9,3,P.k); rect(lx-2,19,5,1,P.sun); dith(lx-6,20,13,2,P.orange,P.sun); }
+  // floorboards, wider toward the viewer
+  rect(0,FLOOR,W,H-FLOOR,P.red);
+  let fy=FLOOR, gap=3, row=0;
+  while(fy<H){ rect(0,fy,W,1,P.plum); for(let x=(row*29)%61;x<W;x+=61) rect(x,fy,1,gap,P.plum); fy+=gap; gap+=1; row++; }
+  // rug
+  for(let y=150;y<172;y++){ const inset=(172-y)*0.6; for(let x=Math.round(100+inset);x<Math.round(196-inset);x++){ const b=((x>>2)+(y>>1))%4; rect(x,y,1,1,y<152||y>169?P.sun:b===0?P.sun:b===2?P.teal:P.navy); } }
+  // chalkboard A-frame by the door
+  rect(14,152,2,18,P.plum); rect(58,152,2,18,P.plum); rect(12,140,50,16,P.plum); rect(14,142,46,12,P.dusk);
+  text(`DAY ${S.day}`,37,144,P.white,8,'center',null);
+  // the front door: open to the beach on the left
+  rect(0,14,16,FLOOR-14,P.plum); rect(0,18,12,FLOOR-18,P.orange);
+  ctx.save(); ctx.beginPath(); ctx.rect(0,18,12,FLOOR-18); ctx.clip(); drawWindowView(-40,18,52,FLOOR-18,t); ctx.restore();
+  dith(0,FLOOR,22,6,P.red,P.orange);                                              // daylight spilling in
+  // counter, with the owner behind it
+  drawPerson(282,132,OWNER,'stand',0,true);
+  rect(252,122,68,4,P.sun); rect(252,126,68,1,P.orange);
+  rect(254,127,66,34,P.plum); for(let x=258;x<320;x+=8) rect(x,128,1,32,P.red); rect(254,160,66,2,P.k);
+  rect(300,110,16,12,P.dusk); rect(302,112,12,4,P.lime); rect(301,118,14,3,P.k);                       // register
+  rect(262,117,8,5,P.white); rect(262,115,8,2,P.sky); rect(274,119,10,3,P.aqua); rect(275,117,1,2,P.aqua); rect(281,117,1,2,P.aqua);   // wax, fins
+  // the customer: walks in from the beach door and stops at the counter
+  if(S.customer && screen==='shop'){
+    const c=S.customer; const dt=t-shopT0; const stopX=238; const x=Math.min(stopX,-8+dt*95); const walking=x<stopX;
+    drawPerson(x,168,c.look,walking?'walk':'stand',t,false);
+    if(!walking){ const bob=Math.floor(t*3)%2, by=117-bob; rect(x-8,by,16,13,P.white); rect(x-8,by,1,1,P.red); rect(x+7,by,1,1,P.red); rect(x-2,by+13,3,3,P.white); text('!',x-3,by+2,P.k,8,'left',null); }
   }
-  text(`DAY ${S.day}`,6,168,P.k,8,'left',null);
 }
 
 /* ============================== SCREEN: SHAPING BAY ============================== */
+let planeT=0;
 function drawShape(t){
-  rect(0,0,W,H,P.dusk);
-  // side lights (shaping rooms light from the sides to show the curves)
-  rect(0,18,W,2,P.mist); rect(0,104,W,2,P.mist);
-  rect(0,20,W,1,P.slate); rect(0,106,W,1,P.slate);
-  // floor & dust
-  rect(0,150,W,30,P.k);
-  for(let i=0;i<60;i++){ const x=(i*53)%W, y=152+((i*17)%26); rect(x,y,2,1,P.slate); }
+  const FLOOR=112;
+  // cinderblock walls in the dark, lit from the sides
+  rect(0,0,W,FLOOR,P.navy);
+  for(let y=0,r=0;y<FLOOR;y+=8,r++){ rect(0,y,W,1,P.k); for(let x=(r%2)*8;x<W;x+=16) rect(x,y,1,8,P.k); }
+  dith(0,0,26,FLOOR,P.navy,P.dusk); dith(W-26,0,26,FLOOR,P.navy,P.dusk);
+  // side light tubes
+  for(const lx of [2,W-5]){ rect(lx,30,3,62,P.white); rect(lx+(lx<10?3:-1),30,1,62,P.aqua); }
+  // shelf of blanks
+  rect(60,18,200,2,P.plum); for(let k=0;k<5;k++){ rect(64+k*40,10,34,8,P.white); rect(64+k*40,13,34,1,P.orange); rect(64+k*40,17,34,1,P.mist); }
+  // outline templates hanging on the wall
+  [['gun',102,20],['log',114,23],['egg',84,21.5],['fish',66,21]].forEach(([tp,L,Wd],k)=>{ const c=boardCanvas({mat:'pu',tpl:tp,L,W:Wd,tail:TEMPLATES[tp].def.tail},0.4,'h',true); const gx=34+k*52; ctx.drawImage(c,Math.round(gx),30); rect(gx+Math.round(c.width/2),27,1,3,P.slate); });
+  // tools on a pegboard (right)
+  rect(244,26,52,18,P.dusk); for(let x=247;x<296;x+=4) for(let y=29;y<44;y+=4) rect(x,y,1,1,P.k);
+  rect(248,32,12,6,P.red); rect(250,30,8,2,P.k); rect(258,38,3,2,P.k);                // planer
+  rect(266,30,3,12,P.sun); rect(264,30,7,2,P.mist);                                    // surform
+  rect(276,34,10,5,P.mist); rect(288,28,2,12,P.slate); rect(287,28,4,2,P.slate);     // sanding block, calipers
+  // floor: concrete covered in foam dust that piles up as you shape more boards
+  rect(0,FLOOR,W,H-FLOOR,P.dusk); rect(0,FLOOR,W,1,P.k); dith(0,FLOOR+1,W,3,P.dusk,P.k);
+  const piles=Math.min(9,2+S.built);
+  for(let k=0;k<piles;k++){ const px=20+((k*97)%280), pw=10+(k*7)%14, ph=2+(k%3); for(let r=0;r<ph;r++) rect(px+r*2,FLOOR+14+((k*11)%22)-r,pw-r*4,1,r===ph-1?P.white:P.mist); }
+  for(let k=0;k<40;k++) rect((k*61)%W,FLOOR+4+(k*13)%44,1,1,P.mist);
   const b=S.board; if(!b) return;
-  const sc=1.3;
-  // stands
-  const Lp=b.L*sc; rect(160-Lp*0.3-2,72,4,34,P.k); rect(160+Lp*0.3-2,72,4,34,P.k);
+  const sc=1.3, Lp=b.L*sc, x0=Math.round(160-Lp/2);
+  // shaping stands and the board's shadow
+  dith(Math.round(160-Lp*0.45),FLOOR+3,Math.round(Lp*0.9),3,P.dusk,P.k);
+  for(const sx of [160-Lp*0.3,160+Lp*0.3]){ rect(sx-2,72,4,FLOOR-70,P.k); rect(sx-6,FLOOR,12,2,P.k); rect(sx-5,68,10,4,P.plum); }
   drawBoard(b,160,62,sc,'h');
-  drawProfile(b,160,126,sc);
-  // ruler
-  const x0=Math.round(160-Lp/2); rect(x0,142,Math.round(Lp),1,P.mist);
-  for(let i=0;i<=Math.floor(b.L/12);i++){ rect(x0+Math.round(i*12*sc),140,1,i%5===0?5:3,P.mist); }
-  rect(x0+Math.round(Lp)-1,138,1,6,P.sun);
-  text(boardName(b).toUpperCase(),6,4,P.sun,8,'left');
+  // a planer pass along the deck whenever the shape changes
+  if(planeT>0){ planeT=Math.max(0,planeT-1/60); const k=1-planeT/0.6, px=x0+Lp*k;
+    rect(px-6,56,12,5,P.red); rect(px-4,54,8,2,P.k); rect(px-6,61,12,1,P.k);
+    if(Math.random()<0.8) shapeDust.push({x:px-6,y:58,vx:rnd(-30,-5),vy:rnd(-40,-10),t:0,c:pick([P.white,P.mist])}); }
+  // rocker bench: the side profile on a lit table
+  rect(6,118,W-12,32,P.k); rect(8,120,W-16,28,P.navy); dith(8,120,W-16,2,P.navy,P.blue);
+  text('ROCKER',12,122,P.slate,8,'left',null); text('NOSE>',W-12,122,P.slate,8,'right',null);
+  drawProfile(b,160,138,sc);
+  rect(x0,145,Math.round(Lp),1,P.mist);
+  for(let i=0;i<=Math.floor(b.L/12);i++) rect(x0+Math.round(i*12*sc),143,1,i%5===0?4:2,P.mist);
+  rect(x0+Math.round(Lp)-1,142,1,5,P.sun);
+  // name plate and spec readout
+  const nm=boardName(b).toUpperCase(); rect(2,2,nm.length*8+8,12,P.k); text(nm,6,4,P.sun,8,'left',null);
   const r=calcStats(b);
-  text(`${fmtLen(b.L)} x ${frac(b.W,4)} x ${frac(b.T)}`,6,160,P.white,8,'left');
-  text(`${r.vol.toFixed(1)}L ${Math.round(r.weight)}LB`,314,160,P.aqua,8,'right');
-  text('NOSE>',314,88,P.slate,8,'right',null);
+  rect(0,158,W,22,P.k);
+  text(`${fmtLen(b.L)} x ${frac(b.W,4)} x ${frac(b.T)}`,6,164,P.white,8,'left',null);
+  text(`${r.vol.toFixed(1)}L ${Math.round(r.weight)}LB`,314,164,P.aqua,8,'right',null);
   // dust
   for(const d of shapeDust){ d.t+=1/60; d.x+=d.vx/60; d.y+=d.vy/60; d.vy+=60/60; rect(d.x,d.y,1,1,d.c); }
-  shapeDust=shapeDust.filter(d=>d.t<1.2 && d.y<178);
+  shapeDust=shapeDust.filter(d=>d.t<1.2 && d.y<FLOOR+30);
 }
 function dust(n=24){
   if(REDUCED) n=6; const b=S.board; const Lp=b.L*1.3;
   for(let i=0;i<n;i++) shapeDust.push({x:160+rnd(-Lp/2,Lp/2),y:62+rnd(-10,10),vx:rnd(-20,20),vy:rnd(-30,0),t:0,c:pick([P.white,P.mist,P.sun])});
+  if(!REDUCED) planeT=0.6;
   sfx.plane();
 }
 
@@ -804,7 +938,7 @@ function drawResults(t){
   const R=S.last; drawBeach(t, R?SPOTS[R.spot].sky:'day');
   if(!R) return;
   const c=boardCanvas(R.board,0.5,'v'); ctx.drawImage(c,Math.round(120-c.width/2),Math.round(170-c.height));
-  drawPerson(134,170,R.look,'stand',t);
+  drawPerson(140,170,R.look,'stand',t);
   const shown=Math.min(R.stars, Math.floor(t*4)/2);
   for(let i=0;i<5;i++){ const on=i+1<=shown; drawStar(170+i*26,40,on,3); if(!on && i+0.5<=shown) { ctx.save(); ctx.beginPath(); ctx.rect(170+i*26,40,10,21); ctx.clip(); drawStar(170+i*26,40,true,3); ctx.restore(); } }
   text(`+$${R.pay+R.tip}`,236,72,P.lime,16,'center',P.k);
@@ -1163,7 +1297,7 @@ function drawSurf(t){
   renderSea();
   { const cc=sv.spot==='bombie'?P.slate:P.white; [[30,18,24],[140,30,18],[230,12,30]].forEach(([x0,y0,w],i)=>{ const x=((x0-sv.cam*0.06*(1+i*0.3))%380+380)%380-40; rect(x,y0,w,4,cc); rect(x+4,y0-3,w-10,3,cc); rect(x+8,y0+4,w-14,2,cc); }); }
   const st=sv.stats; const d=sv.x-sv.cx; const Hc=faceH(Math.max(0,d));
-  const bl=clamp(Math.round(sv.ft*3.1),12,52); const bcol=matCols(sv.board.mat);
+  const bl=clamp(Math.round(sv.ft*4.8),18,80); const bcol=matCols(sv.board.mat);
   const drawRideBoard=(rx,ry,ang)=>{ const ca=Math.cos(ang), sa=Math.sin(ang);
     for(let i=-bl/2;i<=bl/2;i++){ const x=rx+i*ca, y=ry+i*sa; rect(x,y,1,1,bcol.base); rect(x,y+1,1,1,bcol.edge); }
     if(sv.board.fins!=='none'){ rect(rx-(bl/2-3)*ca-sa*2, ry-(bl/2-3)*sa+2,2,2,P.k); } };
@@ -1173,7 +1307,7 @@ function drawSurf(t){
     const ry=bumpTop(RX)+bob; const ang=Math.atan2(bumpTop(RX+6)-bumpTop(RX-6),12);
     drawRideBoard(RX,ry,ang);
     drawPerson(RX,ry,OWNER,sv.stroke>0?'paddle':'prone',sv.strokePh);
-    if(sv.stroke>0.2) { rect(RX+5,ry+1,2,1,P.white); rect(RX+8,ry,1,1,P.white); }
+    if(sv.stroke>0.2) { rect(RX+10,ry+1,3,1,P.white); rect(RX+14,ry,1,1,P.white); }
   } else if(ph==='pop'){
     const ry=riderY(); drawRideBoard(RX,ry,sv.ang);
     drawPerson(RX,ry,OWNER,'paddle',tick*1.5);
@@ -1204,12 +1338,12 @@ function drawSurf(t){
     if(clipY!==null){ ctx.restore(); if(sv.p<1.35 && Math.random()<0.5) spray(2,RX-4,clipY-1,-1); }
   } else if(ph==='wipe'){
     const b=sv.wb; if(b) drawRideBoard(b.x,b.y,b.rot);
-    if(sv.t<1.1){ const k=Math.min(1,sv.t/0.9); drawPerson(RX+6*k,sv.wy+(TY-sv.wy)*k*k,OWNER,'tumble',sv.t); }
-    else drawPerson(RX-8-(sv.t-1.1)*6,TY-1+Math.round(Math.sin(sv.t*4)),OWNER,'swim',sv.t);
+    if(sv.t<1.1){ const k=Math.min(1,sv.t/0.9); drawPerson(RX+9*k,sv.wy+(TY-sv.wy)*k*k,OWNER,'tumble',sv.t); }
+    else drawPerson(RX-12-(sv.t-1.1)*6,TY+1+Math.round(Math.sin(sv.t*4)),OWNER,'swim',sv.t);
   }
   for(const p of sv.parts){ const x=p.wx-sv.x+RX; rect(x,p.y,1,1,p.c); }
   ctx.setTransform(2,0,0,2,0,0);
-  { const by=Math.min(TY-34, riderY()-30); let py=0;
+  { const by=Math.min(TY-46, riderY()-44); let py=0;
     for(let i=sv.pops.length-1;i>=0;i--){ const p=sv.pops[i]; const y=Math.max(ph==='paddle'||ph==='pop'?58:20, by-p.t*16-py);
       if(p.t<1.15 || Math.floor(p.t*10)%2===0) text(p.txt,clamp(RX,70,250),y,p.c,8,'center'); py+=11; } }
   // HUD
