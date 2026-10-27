@@ -623,10 +623,10 @@ function drawPerson(x,y,lk,pose='stand',f=0,flip=false){
     head(x+4,y-8);                           // head up, looking forward
     if(pose==='paddle'){
       const a=Math.floor(f*4)%4;
-      if(a===0) rect(x+5,y-3,5,1,lk.skin);            // reach forward
-      else if(a===1){ rect(x+3,y-2,1,2,lk.skin); rect(x+3,y,1,3,lk.skin); } // catch, hand in the water
-      else if(a===2){ rect(x-2,y-2,5,1,lk.skin); rect(x-3,y-1,1,3,lk.skin); } // pull back
-      else { rect(x+1,y-7,1,3,lk.skin); rect(x+2,y-8,2,1,lk.skin); }       // recover over the top
+      if(a===0) rect(x+6,y-2,6,1,lk.skin);                                       // reach out past the nose
+      else if(a===1){ rect(x+7,y-2,1,3,lk.skin); rect(x+6,y+1,3,1,P.white); }      // catch: hand into the water, splash
+      else if(a===2){ rect(x-2,y-2,6,1,lk.skin); rect(x-4,y+1,3,1,P.white); }      // pull back along the rail
+      else { rect(x+1,y-7,1,3,lk.skin); rect(x+2,y-8,2,1,lk.skin); }               // recover over the top
     } else rect(x+1,y-1,4,1,lk.skin);
     break; }
   case 'pushup':
@@ -856,7 +856,7 @@ function beginWave(){
 function faceH(dd){ return surf.Hmax*clamp(1-Math.max(0,dd-110)/320,0.32,1); }
 function curlSX(){ return RX-(surf.x-surf.cx); }
 function bumpTop(x){ const sv=surf; return TY-5-sv.swA*Math.exp(-Math.pow((x-sv.sw)/(38+sv.swA*0.3),2)); }
-function wallTop(dd){ const Hm=surf.Hmax; if(dd>=0) return TY-faceH(dd); const u=-dd/(Hm*0.75); return u<1?TY-Hm*Math.sqrt(1-u*u):TY-Hm*0.42; }
+function wallTop(dd){ return curlTop(dd,surf.Hmax,curlGeo(surf.Hmax,surf.kind)); }
 function topAt(x){ const m=surf.morph; if(m<=0) return bumpTop(x); const w=wallTop(x-curlSX()); return m>=1?w:bumpTop(x)*(1-m)+w*m; }
 function pocketMult(d){ return d<70?1.5:d<160?1:0.6; }
 function popText(txt,c=P.sun){ surf.pops.push({txt,c,t:0}); }
@@ -902,12 +902,13 @@ function updateSurf(dt){
     sv.sw+=(RX-sv.sw)*Math.min(1,dt*4); sv.swA=Math.min(sv.Hmax,sv.swA+sv.Hmax*1.2*dt);
     sv.morph=Math.min(0.7,sv.morph+dt*0.9); sv.p=0.92; sv.ang+=(0.35-sv.ang)*Math.min(1,dt*5);
     sv.cam+=30*dt; if(Math.random()<0.5) spray(1,RX+12,riderY()+2,1);
-    if(consume('up')){ sv.phase='takeoff'; sv.t=0; sv.v=sv.cs*0.95; sv.vp=-0.6; sfx.pop(); spray(10,RX,riderY(),1); }
+    if(consume('up')){ sv.phase='takeoff'; sv.t=0; sv.m0=sv.morph; sv.v=sv.cs*0.95; sv.vp=-0.6; sfx.pop(); spray(10,RX,riderY(),1); }
     else if(sv.t>sv.popWin){ wipe('Too slow on the pop-up. The wave pitched you over the falls.'); }
   } else if(sv.phase==='takeoff'){
     // push-up, tuck the feet, rise: about half a second while the board drops down the face
     const T=0.55;
-    sv.morph=Math.min(1,sv.morph+dt*0.8); sv.p=Math.max(0.68,sv.p-dt*0.45);
+    { const k=Math.min(1,sv.t/T); sv.morph=sv.m0+(1-sv.m0)*k*k*(3-2*k); }   // eases to a fully broken wall exactly as you stand up
+    sv.p=Math.max(0.68,sv.p-dt*0.45);
     sv.x+=sv.v*dt*0.6; sv.cx+=sv.cs*dt*0.6; sv.cam=sv.x;
     sv.ang+=(0.42-sv.ang)*Math.min(1,dt*6);
     if(Math.random()<0.6) spray(1,RX+rnd(-8,8),riderY()+2,-1);
@@ -1062,27 +1063,52 @@ function updateRide(dt){
   if(!sv.made && sv.waveT>1.6){ sv.made=true; award('make',60+sv.size*25, sv.size>=12?'MADE THE DROP!':'CLEAN TAKEOFF',P.white); }
   if(sv.waveT>sv.waveDur){ award('make',100+sv.size*10,'KICK OUT',P.white); sv.phase='rideEnd'; sv.t=0; sv.endNote='Rode it to the end and kicked out clean.'; tip('claim','TAP A TO CLAIM IT'); }
 }
+// 4x4 ordered-dither matrix: the classic 8-bit way to fade between two looks
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+// how the breaking section is shaped for each kind of wave
+function curlGeo(Hm,kind){
+  const lipC=Hm*(kind==='hollow'?0.5:kind==='clean'?0.3:0.45);          // crest to where the lip lands
+  return {kind, lipC, n:kind==='hollow'?2.6:2.1, ov:Math.max(2,Hm*(kind==='hollow'?0.07:0.035)), lipT:Math.max(3,Math.round(Hm*(kind==='hollow'?0.08:0.06)))};
+}
+// top edge of the breaking section, dd = pixels from the curl point (negative = behind it)
+function curlTop(dd,Hm,g){
+  if(dd>=0) return TY-faceH(dd);
+  const u=Math.min(1,-dd/g.lipC);
+  if(dd>=-g.lipC){
+    if(g.kind==='mushy') return TY-Hm*(1-0.3*Math.pow(u,1.5));          // a soft rounded roll of foam
+    return TY-Hm*Math.pow(1-Math.pow(u,g.n),1/g.n);                      // the lip curving over and down (superellipse)
+  }
+  const back=-dd-g.lipC, start=g.kind==='mushy'?0.7:0.78;                 // whitewater settles lower further back
+  return TY-Hm*(0.4+(start-0.4)*Math.exp(-back/(Hm*0.55)))*(0.94+0.06*Math.sin(dd*0.35+tick*7));
+}
+// x (relative to the curl point) of the lip's outer edge at row y
+function curlSide(y,Hm,g){ const v=clamp((TY-y)/Hm,0,1); return -g.lipC*Math.pow(1-Math.pow(v,g.n),1/g.n); }
 function renderSea(){
-  const sv=surf, Hm=sv.Hmax, rows=sv.skyRows, m=sv.morph;
-  const cSX=curlSX();
+  const sv=surf, Hm=sv.Hmax, rows=sv.skyRows, m=sv.morph, kind=sv.kind;
+  const cSX=curlSX(), g=curlGeo(Hm,kind);
   const fr=Math.floor(tick*12), cam=Math.floor(sv.cam), sunBig=sv.sky.sun==='big', sunSmall=sv.sky.sun==='small';
-  const hollow=sv.kind==='hollow', tw=Hm*0.75, lipT=4+Math.round(Hm*0.05);
-  const dis=clamp((m-0.35)/0.65,0,1)*100;
-  const Uw=U.white,Ua=U.aqua,Us=U.sky,Ub=U.blue,Un=U.navy,Um=U.mist,Ut=U.teal;
+  const hollow=kind==='hollow', mushy=kind==='mushy';
+  const grow=clamp((m-0.25)/0.75,0,1), sweep=Hm*2.2;
+  const Uw=U.white,Ua=U.aqua,Us=U.sky,Ub=U.blue,Un=U.navy,Um=U.mist,Ut=U.teal,Uk=U.k;
   const faceC=(f,x,y)=>{ const dith=(x+y)&1; let c;
     if(f<0.05) c=Uw; else if(f<0.12) c=dith?Uw:Ua; else if(f<0.3) c=Ua; else if(f<0.34) c=dith?Ua:Us; else if(f<0.55) c=Us; else if(f<0.59) c=dith?Us:Ub; else if(f<0.8) c=Ub; else if(f<0.84) c=dith?Ub:Un; else c=Un;
     if(((y*5+x+cam)%37)===0 && f>0.12) c=(c===Un?Ub:c===Ub?Us:Ua); return c; };
+  const shade=c=> c===Uw?Ua : c===Ua?Us : c===Us?Ub : c===Ub?Un : hollow?Uk:Un;   // one step darker (shadow under the lip)
+  const foam=(x,y,top)=>{ const dpt=y-top, h=hash(x+cam,y,fr)%8;            // whitewater: bright on top, churned lower down
+    if(dpt<2) return h<6?Uw:Um; if(dpt<6) return h<4?Uw:h<6?Um:Ua; return h<2?Uw:h<5?Um:h<7?Ua:Us; };
   const water=(x,y)=>((y+((x+cam)>>3))%7===0)?Ub:Un;
   for(let x=0;x<W;x++){
     const dd=x-cSX;
-    const foamH=Hm*0.42*(0.85+0.15*Math.sin(x*0.3+tick*6));
-    // the wall's own shape at this column (used once the swell has stood up)
-    let wMode=0, arc=0;
-    if(dd>=0){ wMode=0; arc=TY-faceH(dd); } else { const u=-dd/tw; if(u<1){ wMode=1; arc=TY-Hm*Math.sqrt(1-u*u); } else { wMode=2; arc=TY-foamH; } }
-    let lip;
-    if(m>=1) lip=arc; else { const b=TY-5-sv.swA*Math.exp(-Math.pow((x-sv.sw)/(38+sv.swA*0.3),2)); lip = m<=0 ? b : b*(1-m)+arc*m; }
+    // the swell (paddle phase) blends into the standing wall as the wave picks you up
+    const bump=TY-5-sv.swA*Math.exp(-Math.pow((x-sv.sw)/(38+sv.swA*0.3),2));
+    const faceTop = m<=0 ? bump : m>=1 ? TY-faceH(Math.max(0,dd)) : bump*(1-m)+(TY-faceH(Math.max(0,dd)))*m;
+    // the break sweeps in from behind (left) toward the curl point, through an ordered dither
+    const ready = m>=1 ? 1 : clamp(grow*2-(1-Math.min(1,-dd/sweep)),0,1);
+    // behind the curl, the break erupts up out of the trough as it sweeps in (no dither: it grows as a solid mass)
+    const rise = dd<0 ? 1-Math.pow(1-ready,3) : 0;
+    const ctop = dd<0 ? TY-(TY-curlTop(dd,Hm,g))*rise + (dd<-g.lipC ? hash(x+cam,0,fr>>1)%3 : 0) : 0;
     const lx=x+cam*0.05; let lh=(7+5*Math.sin(lx*0.015)+3*Math.sin(lx*0.043))*(Math.sin(lx*0.006)>0.1?1:0); lh=Math.max(0,Math.round(lh));
-    const span=Math.max(6,TY-lip), fOff=0.1*(1-m);
+    const span=Math.max(6,TY-faceTop), fOff=0.1*(1-m);
     for(let y=0;y<H;y++){
       let bg;
       if(y<HY){
@@ -1091,19 +1117,39 @@ function renderSea(){
         else if(sunSmall){ const dx=x-262, dy=y-22; if(dx*dx+dy*dy<64) bg=Uw; }
         if(y>=HY-lh) bg=sv.uLand;
       } else { bg=sv.uSea; if(hash(x+cam,y,Math.floor(tick*3))%211===0) bg=Ua; if(y===HY) bg=Um; }
-      // curl pixels fade in with a dissolve while the swell stands up
-      const curlOn = wMode!==0 && (m>=1 || (hash(x,y,3)%100)<dis);
+      // plain face / swell
       let c;
-      if(!curlOn){
-        if(y<lip) c=bg; else if(y<TY) c=faceC((y-lip)/span*(1-fOff)+fOff,x,y);
-        else c=(y===TY && wMode===0 && m>=1 && hash(x+cam,y,fr)%3===0)?Uw:water(x,y);
-      } else if(wMode===1){
-        if(y<arc) c=bg; else if(y<arc+lipT) c=(y<arc+lipT-1 || ((x+y)&1))?Uw:Ua;
-        else if(y<TY){ if(hollow){ const f=(y-arc)/(TY-arc+1); c = f<0.15?Ut:f<0.7?Un:(hash(x,y,fr)%3===0?Um:Un); if(((y*5+x+cam)%31)===0) c=Ut; }
-          else { const h=hash(x,y,fr)%5; c=h<2?Uw:h<4?Um:Ua; } }
-        else { const h=hash(x,y,fr)%4; c=h===0?Uw:h===1?Um:Un; }
-      } else {
-        if(y<TY-foamH) c=bg; else if(y<TY+8){ const h=hash(x,y,fr)%6; c=h<3?Uw:h<5?Um:Ua; } else c=water(x,y);
+      if(y<faceTop) c=bg; else if(y<TY) c=faceC((y-faceTop)/span*(1-fOff)+fOff,x,y); else c=water(x,y);
+      if(dd<0 && rise>0 && y<TY && y<faceTop+(TY-faceTop)*rise) c=bg;   // the old swell collapses into the foam as the break rises
+      const on = dd<0 ? ready>0 : (ready>=1 || (ready>0 && (BAYER[(y&3)*4+(x&3)]+0.5)/16<ready));
+      if(on && m>0){
+        if(dd>=0){
+          // the lip pitching forward over the face, with a shadow under it
+          if(dd<g.ov && y>=TY-Hm){ const band=Math.round(g.lipT*(1-dd/g.ov)); const yy=y-(TY-Hm);
+            if(yy<band) c=yy<band-1||((x+y)&1)?Uw:Ua; else if(yy<band+2 && y<TY) c=shade(c); }
+          // crumbling foam rolling down the face on soft waves
+          if(mushy && y<TY){ const yy=y-faceTop, reach=Hm*0.9, k=1-dd/reach; if(k>0 && yy>=0 && yy<k*k*Hm*0.5 && hash(x+cam,y,fr)%100<30+60*k) c=foam(x,y,faceTop); }
+          else if(!hollow && dd<Hm*0.4 && y-faceTop>=0 && y-faceTop<2 && hash(x+cam,y,fr)%3===0) c=Uw;   // feathering lip
+        } else if(dd>=-g.lipC){
+          if(y<ctop){}
+          else if(y<TY){
+            const u=-dd/g.lipC, fc=faceC((y-(TY-Hm))/Hm,x,y);
+            if(mushy){
+              // crumbling: foam over a shaded face, thicker toward the back
+              c=shade(fc); if(y-ctop<2 || hash(x+cam,y,fr)%100<(40+60*u)) c=foam(x,y,ctop);
+            } else {
+              // a curved lip band running over the top and down the curtain, the tube inside it
+              const edge=Math.min(y-ctop, dd-curlSide(y,Hm,g)*(m>=1?1:m));
+              if(edge<g.lipT){ c=(edge<g.lipT-1||((x+y)&1))?Uw:Ua; if(y>TY-5 && hash(x,y,fr)%2) c=Um; }
+              else if(hollow){ c=shade(shade(fc)); if(-dd<3 && (x+y)&1) c=shade(fc); if(((y*3+x+cam)%29)===0) c=Ut; if(edge<g.lipT+2 && hash(x,y,fr)%3===0) c=Um; }
+              else { c=shade(fc); if(hash(x+cam,y,fr)%100<u*u*70) c=foam(x,y,ctop); }
+            }
+          } else { const h=hash(x+cam,y,fr)%4; c=h===0?Uw:h===1?Um:Un; }
+        } else {
+          // whitewater behind the curtain
+          if(y<ctop){} else if(y<TY+6) c=foam(x,y,ctop); else if(y<TY+8 && hash(x+cam,y,fr)%2) c=Um;
+        }
+        if(y===TY && dd>=0 && dd<Hm*1.5 && hash(x+cam,y,fr)%3===0) c=Uw;   // trough line sparkle
       }
       pix[y*W+x]=c;
     }
@@ -1136,12 +1182,14 @@ function drawSurf(t){
     const k=sv.t; const pose=k<0.14?'pushup':k<0.3?'tuck':k<0.44?'rise':'surf';
     drawPerson(RX+(pose==='pushup'?-1:0),ry,OWNER,pose,tick);
   } else if(ph==='ride'||ph==='rideEnd'){
-    let ry=riderY(); let ang=sv.ang;
+    let ry=riderY(); let ang=ph==='ride'&&!sv.air ? Math.min(sv.ang,0.12+sv.p*3) : sv.ang;
     if(sv.air){ const k=sv.air.t/sv.air.dur; ry=TY-Hc-sv.air.h*Math.sin(Math.PI*k); }
-    if(ph==='rideEnd' && sv.p>1){ ry=TY-Hc-(sv.p-1)*40+Math.pow(Math.max(0,sv.p-1.3),2)*120; }
+    // kick-out: hop up off the lip, then drop down the back of the wave, hidden behind it
+    let clipY=null;
+    if(ph==='rideEnd' && sv.p>1){ const k=clamp((sv.p-1)/0.6,0,1), lipY=TY-Hc; ry=lipY-Math.sin(Math.PI*Math.min(1,k*1.4))*12+Math.max(0,k-0.55)*60; clipY=lipY+1; }
     if(sv.chatter>0.3 && !REDUCED) ry+=Math.round(rnd(-1,1)*sv.chatter*2);
-    const hidden = ph==='rideEnd' && sv.p>1.5;
-    if(!hidden){
+    if(clipY!==null){ ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,clipY); ctx.clip(); }
+    {
       drawRideBoard(RX,ry,ang);
       const wo=(sv.walk*bl*0.36)-1; const fx=RX+wo*Math.cos(ang), fy=ry+wo*Math.sin(ang);
       let pose = 'surf', f=tick, flip=false;
@@ -1153,6 +1201,7 @@ function drawSurf(t){
       else if(sv.floatT>0) pose='tube';
       drawPerson(fx,fy,OWNER,pose,f,flip);
     }
+    if(clipY!==null){ ctx.restore(); if(sv.p<1.35 && Math.random()<0.5) spray(2,RX-4,clipY-1,-1); }
   } else if(ph==='wipe'){
     const b=sv.wb; if(b) drawRideBoard(b.x,b.y,b.rot);
     if(sv.t<1.1){ const k=Math.min(1,sv.t/0.9); drawPerson(RX+6*k,sv.wy+(TY-sv.wy)*k*k,OWNER,'tumble',sv.t); }
@@ -1160,7 +1209,9 @@ function drawSurf(t){
   }
   for(const p of sv.parts){ const x=p.wx-sv.x+RX; rect(x,p.y,1,1,p.c); }
   ctx.setTransform(2,0,0,2,0,0);
-  let py=0; for(const p of sv.pops){ text(p.txt,RX,60-p.t*18-py,p.c,8,'center'); py+=11; }
+  { const by=Math.min(TY-34, riderY()-30); let py=0;
+    for(let i=sv.pops.length-1;i>=0;i--){ const p=sv.pops[i]; const y=Math.max(ph==='paddle'||ph==='pop'?58:20, by-p.t*16-py);
+      if(p.t<1.15 || Math.floor(p.t*10)%2===0) text(p.txt,clamp(RX,70,250),y,p.c,8,'center'); py+=11; } }
   // HUD
   ctx.globalAlpha=0.75; rect(0,0,W,13,P.k); ctx.globalAlpha=1;
   text(`WAVE ${Math.min(sv.wave,3)}/3`,4,3,P.sun);
@@ -1178,13 +1229,13 @@ function drawSurf(t){
   }
   if(sv.hint && ph==='ride'){ ctx.globalAlpha=0.8; rect(0,156,W,12,P.k); ctx.globalAlpha=1; text(sv.hint.txt,W/2,158,P.sun,8,'center'); }
   if(ph==='paddle'){
-    text(sv.msgT>0?sv.msg:'PADDLE! TAP A OR →',W/2,24,P.white,8,'center');
+    text(sv.msgT>0?sv.msg:'PADDLE! TAP A FAST',W/2,24,P.white,8,'center');
     const mx=Math.max(sv.need*1.3,20+st.paddle*9); const bw=120, bx=W/2-bw/2;
     rect(bx-1,38,bw+2,9,P.k); rect(bx,39,Math.round(bw*clamp(sv.ps/mx,0,1)),7,sv.ps>=sv.need?P.lime:P.sky);
     rect(bx+Math.round(bw*sv.need/mx),36,1,13,P.sun);
     text('NEED',bx+Math.round(bw*sv.need/mx),51,P.sun,8,'center');
   }
-  if(ph==='pop'){ if(Math.floor(tick*8)%2===0) text('POP UP! PRESS ↑',W/2,30,P.lime,8,'center'); rect(W/2-40,44,Math.round(80*clamp(1-sv.t/sv.popWin,0,1)),4,P.lime); }
+  if(ph==='pop'){ if(Math.floor(tick*8)%2===0) text('POP UP! PRESS UP',W/2,30,P.lime,8,'center'); rect(W/2-40,44,Math.round(80*clamp(1-sv.t/sv.popWin,0,1)),4,P.lime); }
   const box=(l1,l2,note)=>{ const ls=note?wrap(note,30).slice(0,3):[]; const hh=40+ls.length*11; rect(24,56,272,hh,P.k); rect(26,58,268,hh-4,P.navy); text(l1,W/2,64,P.sun,8,'center'); if(l2) text(l2,W/2,78,P.white,8,'center'); ls.forEach((l,i)=>text(l,W/2,92+i*11,P.mist,8,'center')); };
   if(ph==='wipe' && sv.t>0.9) box('WIPEOUT!',`SCORE ${judge(sv.points).toFixed(1)}`, sv.endNote);
   if(ph==='rideEnd' && sv.t>1.0) box(sv.claimed?'CLAIMED IT!':'NICE RIDE!',`SCORE ${judge(sv.points).toFixed(1)}`,'Kicked out clean.');
